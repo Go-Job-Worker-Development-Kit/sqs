@@ -1,6 +1,6 @@
 # aws-sqs-connector
 
-A jobworker connector for [go-job-worker-development-kit/jobworker](https://github.com/go-job-worker-development-kit/jobworker) package.
+A jobworker connector with Amazon SQS for [go-job-worker-development-kit/jobworker](https://github.com/go-job-worker-development-kit/jobworker) package.
 
 ## Requirements
 
