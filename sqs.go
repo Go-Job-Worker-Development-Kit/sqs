@@ -17,38 +17,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/sqs"
 )
 
-var provider = Provider{}
-
-func init() {
-	jobworker.Register("sqs", provider)
-}
-
-type Provider struct {
-}
-
-func OpenWithSQS(svc *sqs.SQS) jobworker.Connector {
-	return &connector{
-		name: connName,
-		svc:  svc,
-	}
-}
-
-const (
-	logPrefix = "[sqs-connector]"
-
-	connName = "sqs"
-
-	connAttributeNameAwsRegion          = "Region"
-	connAttributeNameAwsAccessKeyID     = "AccessKeyID"
-	connAttributeNameAwsSecretAccessKey = "SecretAccessKey"
-	connAttributeNameAwsSessionToken    = "SessionToken"
-	connAttributeNameNumMaxRetries      = "NumMaxRetries"
-
-	messageAttributeNameJobClass = "JobClass"
-)
-
-func (Provider) Open(attrs map[string]interface{}) (jobworker.Connector, error) {
-
+func Open(attrs map[string]interface{}) (*Connector, error) {
 	values := connAttrsToValues(attrs)
 	values.applyDefaultValues()
 
@@ -68,8 +37,40 @@ func (Provider) Open(attrs map[string]interface{}) (jobworker.Connector, error) 
 	// Create a SQS service client.
 	svc := sqs.New(sess)
 
-	return OpenWithSQS(svc), nil
+	return OpenWithSQS(svc)
 }
+
+func OpenWithSQS(svc *sqs.SQS) (*Connector, error) {
+	return &Connector{
+		name: connName,
+		svc:  svc,
+	}, nil
+}
+
+func init() {
+	jobworker.Register("sqs", &Provider{})
+}
+
+type Provider struct {
+}
+
+func (Provider) Open(attrs map[string]interface{}) (jobworker.Connector, error) {
+	return Open(attrs)
+}
+
+const (
+	logPrefix = "[sqs-connector]"
+
+	connName = "sqs"
+
+	connAttributeNameAwsRegion          = "Region"
+	connAttributeNameAwsAccessKeyID     = "AccessKeyID"
+	connAttributeNameAwsSecretAccessKey = "SecretAccessKey"
+	connAttributeNameAwsSessionToken    = "SessionToken"
+	connAttributeNameNumMaxRetries      = "NumMaxRetries"
+
+	messageAttributeNameJobClass = "JobClass"
+)
 
 type values struct {
 	region          *string
@@ -110,18 +111,18 @@ func connAttrsToValues(attrs map[string]interface{}) *values {
 	return &values
 }
 
-type connector struct {
+type Connector struct {
 	name       string
 	svc        *sqs.SQS
 	name2queue sync.Map
-	logger     jobworker.Logger
+	loggerFunc jobworker.LoggerFunc
 }
 
-func (c *connector) GetName() string {
+func (c *Connector) GetName() string {
 	return c.name
 }
 
-func (c *connector) CreateQueue(ctx context.Context, input *jobworker.CreateQueueInput, opts ...func(*jobworker.Option)) (*jobworker.CreateQueueOutput, error) {
+func (c *Connector) CreateQueue(ctx context.Context, input *jobworker.CreateQueueInput, opts ...func(*jobworker.Option)) (*jobworker.CreateQueueOutput, error) {
 
 	attributes := make(map[string]*string)
 	for k, v := range input.Attributes {
@@ -140,7 +141,7 @@ func (c *connector) CreateQueue(ctx context.Context, input *jobworker.CreateQueu
 	return &jobworker.CreateQueueOutput{}, nil
 }
 
-func (c *connector) UpdateQueue(ctx context.Context, input *jobworker.UpdateQueueInput, opts ...func(*jobworker.Option)) (*jobworker.UpdateQueueOutput, error) {
+func (c *Connector) UpdateQueue(ctx context.Context, input *jobworker.UpdateQueueInput, opts ...func(*jobworker.Option)) (*jobworker.UpdateQueueOutput, error) {
 	queue, err := c.resolveQueue(ctx, input.Name)
 	if err != nil {
 		// TODO
@@ -164,16 +165,16 @@ func (c *connector) UpdateQueue(ctx context.Context, input *jobworker.UpdateQueu
 	return &jobworker.UpdateQueueOutput{}, nil
 }
 
-func (c *connector) Close() error {
+func (c *Connector) Close() error {
 	c.debug("no 'Close' available")
 	return nil
 }
 
-func (c *connector) SetLogger(logger jobworker.Logger) {
-	c.logger = logger
+func (c *Connector) SetLoggerFunc(f jobworker.LoggerFunc) {
+	c.loggerFunc = f
 }
 
-func (c *connector) ReceiveJobs(ctx context.Context, ch chan<- *jobworker.Job, input *jobworker.ReceiveJobsInput, opts ...func(*jobworker.Option)) (*jobworker.ReceiveJobsOutput, error) {
+func (c *Connector) Subscribe(ctx context.Context, input *jobworker.SubscribeInput, opts ...func(*jobworker.Option)) (*jobworker.SubscribeOutput, error) {
 	queue, err := c.resolveQueue(ctx, input.Queue)
 	if err != nil {
 		// TODO
@@ -245,7 +246,7 @@ func (c *connector) ReceiveJobs(ctx context.Context, ch chan<- *jobworker.Job, i
 
 }
 
-func (c *connector) RedriveJob(ctx context.Context, input *jobworker.RedriveJobInput, opts ...func(*jobworker.Option)) (*jobworker.RedriveJobOutput, error) {
+func (c *Connector) RedriveJob(ctx context.Context, input *jobworker.RedriveJobInput, opts ...func(*jobworker.Option)) (*jobworker.RedriveJobOutput, error) {
 	fromQueue, err := c.resolveQueue(ctx, input.From)
 	if err != nil {
 		// TODO
@@ -332,7 +333,7 @@ L:
 
 }
 
-func (c *connector) EnqueueJob(ctx context.Context, input *jobworker.EnqueueJobInput, opts ...func(*jobworker.Option)) (*jobworker.EnqueueJobOutput, error) {
+func (c *Connector) EnqueueJob(ctx context.Context, input *jobworker.EnqueueJobInput, opts ...func(*jobworker.Option)) (*jobworker.EnqueueJobOutput, error) {
 
 	queue, err := c.resolveQueue(ctx, input.Queue)
 	if err != nil {
@@ -388,7 +389,7 @@ func newSendMessageInput(payload *jobworker.Payload, queue *internal.Queue) *sqs
 	return input
 }
 
-func (c *connector) EnqueueJobBatch(ctx context.Context, input *jobworker.EnqueueJobBatchInput, opts ...func(*jobworker.Option)) (*jobworker.EnqueueJobBatchOutput, error) {
+func (c *Connector) EnqueueJobBatch(ctx context.Context, input *jobworker.EnqueueJobBatchInput, opts ...func(*jobworker.Option)) (*jobworker.EnqueueJobBatchOutput, error) {
 
 	queue, err := c.resolveQueue(ctx, input.Queue)
 	if err != nil {
@@ -435,7 +436,7 @@ func newSendMessageBatchRequestEntry(id string, payload *jobworker.Payload) *sqs
 	}
 }
 
-func (c *connector) CompleteJob(ctx context.Context, input *jobworker.CompleteJobInput, opts ...func(*jobworker.Option)) (*jobworker.CompleteJobOutput, error) {
+func (c *Connector) CompleteJob(ctx context.Context, input *jobworker.CompleteJobInput, opts ...func(*jobworker.Option)) (*jobworker.CompleteJobOutput, error) {
 	queue, err := c.resolveQueue(ctx, input.Job.Queue)
 	if err != nil {
 		// TODO
@@ -452,7 +453,7 @@ func (c *connector) CompleteJob(ctx context.Context, input *jobworker.CompleteJo
 	return &jobworker.CompleteJobOutput{}, nil
 }
 
-func (c *connector) FailJob(ctx context.Context, input *jobworker.FailJobInput, opts ...func(*jobworker.Option)) (*jobworker.FailJobOutput, error) {
+func (c *Connector) FailJob(ctx context.Context, input *jobworker.FailJobInput, opts ...func(*jobworker.Option)) (*jobworker.FailJobOutput, error) {
 	_, err := c.ChangeJobVisibility(ctx, &jobworker.ChangeJobVisibilityInput{
 		Job:               input.Job,
 		VisibilityTimeout: 0,
@@ -460,7 +461,7 @@ func (c *connector) FailJob(ctx context.Context, input *jobworker.FailJobInput, 
 	return &jobworker.FailJobOutput{}, err
 }
 
-func (c *connector) ChangeJobVisibility(ctx context.Context, input *jobworker.ChangeJobVisibilityInput, opts ...func(*jobworker.Option)) (*jobworker.ChangeJobVisibilityOutput, error) {
+func (c *Connector) ChangeJobVisibility(ctx context.Context, input *jobworker.ChangeJobVisibilityInput, opts ...func(*jobworker.Option)) (*jobworker.ChangeJobVisibilityOutput, error) {
 	queue, err := c.resolveQueue(ctx, input.Job.Queue)
 	if err != nil {
 		// TODO
@@ -474,7 +475,7 @@ func (c *connector) ChangeJobVisibility(ctx context.Context, input *jobworker.Ch
 	return &jobworker.ChangeJobVisibilityOutput{}, nil
 }
 
-func (c *connector) resolveQueue(ctx context.Context, name string) (*internal.Queue, error) {
+func (c *Connector) resolveQueue(ctx context.Context, name string) (*internal.Queue, error) {
 
 	v, ok := c.name2queue.Load(name)
 	if !ok || v == nil {
@@ -509,13 +510,13 @@ func (c *connector) resolveQueue(ctx context.Context, name string) (*internal.Qu
 	return v.(*internal.Queue), nil
 }
 
-func (c *connector) debug(args ...interface{}) {
+func (c *Connector) debug(args ...interface{}) {
 	if c.verbose() {
 		args = append([]interface{}{logPrefix}, args...)
-		c.logger.Debug(args...)
+		c.loggerFunc(args...)
 	}
 }
 
-func (c *connector) verbose() bool {
-	return c.logger != nil
+func (c *Connector) verbose() bool {
+	return c.loggerFunc != nil
 }

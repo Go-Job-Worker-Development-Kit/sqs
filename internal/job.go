@@ -1,34 +1,25 @@
 package internal
 
 import (
+	"github.com/aws/aws-sdk-go/service/sqs"
 	"github.com/go-job-worker-development-kit/jobworker"
 )
 
 type Job struct {
-	JobID           string
-	Class           string
-	ReceiptID       string
-	Args            string
-	DeduplicationID string
-	GroupID         string
-	InvisibleUntil  int64
-	RetryCount      int64
-	EnqueueAt       int64
+	JobID    string
+	Class    string
+	Args     string
+	Metadata map[string]string
 }
 
-func (j *Job) ToJob(queue string, conn jobworker.Connector) *jobworker.Job {
-	job := jobworker.NewJob(
+func (j *Job) ToJob(queue string, msg *sqs.Message, conn jobworker.Connector) *jobworker.Job {
+	return jobworker.NewJob(
 		queue,
-		j.JobID,
+		msg.
+			j.JobID,
 		j.Class,
-		j.ReceiptID,
 		j.Args,
-		j.DeduplicationID,
-		j.GroupID,
-		j.InvisibleUntil,
-		j.RetryCount,
-		j.EnqueueAt,
+		j.Metadata,
 		conn,
 	)
-	return job
 }
