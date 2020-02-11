@@ -3,7 +3,6 @@ package internal
 import (
 	"context"
 	"errors"
-	"strconv"
 	"sync/atomic"
 	"time"
 
@@ -20,10 +19,11 @@ const (
 	subStateClosed  = 2
 )
 
-func NewSubscription(name string, raw *sqs.SQS) *Subscription {
+func NewSubscription(name string, raw *sqs.SQS, conn jobworker.Connector) *Subscription {
 	return &Subscription{
 		name:  name,
 		raw:   raw,
+		conn:  conn,
 		queue: make(chan *jobworker.Job),
 	}
 }
@@ -31,6 +31,7 @@ func NewSubscription(name string, raw *sqs.SQS) *Subscription {
 type Subscription struct {
 	name  string
 	raw   *sqs.SQS
+	conn  jobworker.Connector
 	queue chan *jobworker.Job
 	state int32
 }
@@ -52,13 +53,20 @@ func (s *Subscription) UnSubscribe() error {
 	return nil
 }
 
-func (s *Subscription) ReadLoop(conn jobworker.Connector) {
+func (s *Subscription) ReadLoop() {
 
 	ch := make(chan *sqs.Message)
 
 	go func() {
 		for {
-			result, err := s.raw.ReceiveMessageWithContext(context.Background(), &sqs.ReceiveMessageInput{
+
+			if atomic.LoadInt32(&s.state) != subStateActive {
+				// TODO logging
+				return
+			}
+
+			ctx := context.Background()
+			result, err := s.raw.ReceiveMessageWithContext(ctx, &sqs.ReceiveMessageInput{
 				AttributeNames: []*string{
 					aws.String(sqs.QueueAttributeNameAll),
 				},
@@ -91,68 +99,11 @@ func (s *Subscription) ReadLoop(conn jobworker.Connector) {
 			}
 			return
 		}
-
-		for k, v := range msg.Attributes {
-			sentTimestamp := msg.Attributes[sqs.MessageSystemAttributeNameSentTimestamp]
-			approximateReceiveCount := msg.Attributes[sqs.MessageSystemAttributeNameApproximateReceiveCount]
-			messageDeduplicationId := msg.Attributes[sqs.MessageSystemAttributeNameMessageDeduplicationId]
-			messageGroupId := msg.Attributes[sqs.MessageSystemAttributeNameMessageGroupId]
-		}
-
-		class := msg.MessageAttributes[messageAttributeNameJobClass]
-
-		retryCount, err := strconv.ParseInt(aws.StringValue(approximateReceiveCount), 10, 64)
-		if err != nil {
-			c.debug("could not parse approximateReceiveCount:", approximateReceiveCount, err)
-		}
-
-		enqueueAt, err := strconv.ParseInt(aws.StringValue(sentTimestamp), 10, 64)
-		if err != nil {
-			c.debug("could not parse sentTimestamp:", sentTimestamp, err)
-		}
-
-		job := &internal.Job{
-			JobID:           aws.StringValue(msg.MessageId),
-			Class:           aws.StringValue(class.StringValue),
-			ReceiptID:       aws.StringValue(msg.ReceiptHandle),
-			Args:            aws.StringValue(msg.Body),
-			DeduplicationID: aws.StringValue(messageDeduplicationId),
-			GroupID:         aws.StringValue(messageGroupId),
-			RetryCount:      retryCount,
-			EnqueueAt:       enqueueAt,
-		}
-
-		s.queue <- newJob(s.name, msg, conn)
+		s.queue <- newJob(s.name, msg, s.conn)
 	}
 }
 
 func (s *Subscription) closeQueue() {
 	atomic.StoreInt32(&s.state, subStateClosed)
 	close(s.queue)
-}
-
-func newJob(queue string, msg *sqs.Message, conn jobworker.Connector) *jobworker.Job {
-	metadata := make(map[string]string)
-	for k, v := range msg.Attributes {
-		if v != nil {
-			metadata[k] = *v
-		}
-	}
-	for k, v := range msg.MessageAttributes {
-		if v.DataType != nil {
-			switch v.DataType {
-			case :
-				
-			}
-			metadata[k] = *
-		}
-	}
-	job := jobworker.NewJob(
-		queue,
-		aws.StringValue(msg.Body),
-		metadata,
-		conn,
-		msg,
-	)
-	return job
 }
