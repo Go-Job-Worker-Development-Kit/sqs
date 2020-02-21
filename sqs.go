@@ -16,20 +16,46 @@ import (
 	"github.com/aws/aws-sdk-go/service/sqs"
 )
 
+const (
+	connName  = "sqs"
+	pkgName   = "aws-sqs-connector"
+	logPrefix = "[" + pkgName + "]"
+
+	connAttributeNameAwsRegion          = "Region"
+	connAttributeNameAwsAccessKeyID     = "AccessKeyID"
+	connAttributeNameAwsSecretAccessKey = "SecretAccessKey"
+	connAttributeNameAwsSessionToken    = "SessionToken"
+	connAttributeNameNumMaxRetries      = "NumMaxRetries"
+
+	defaultNumMaxRetries = 3
+)
+
+func init() {
+	jobworker.Register(connName, &Provider{})
+}
+
+type Provider struct {
+}
+
+func (Provider) Open(attrs map[string]interface{}) (jobworker.Connector, error) {
+	return Open(attrs)
+}
+
 func Open(attrs map[string]interface{}) (*Connector, error) {
 	values := connAttrsToValues(attrs)
 	values.applyDefaultValues()
 
-	awsCfg := &aws.Config{
-		Region: values.region,
-		Credentials: credentials.NewStaticCredentials(
+	var awsCfg aws.Config
+	awsCfg.Region = aws.String(values.region)
+	if (values.accessKeyID != "" && values.secretAccessKey != "") || values.sessionToken != "" {
+		awsCfg.Credentials = credentials.NewStaticCredentials(
 			values.accessKeyID,
 			values.secretAccessKey,
-			values.sessionToken),
-		MaxRetries: values.numMaxRetries,
+			values.sessionToken)
 	}
+	awsCfg.MaxRetries = values.numMaxRetries
 
-	sess, err := session.NewSession(awsCfg)
+	sess, err := session.NewSession(&awsCfg)
 	if err != nil {
 		return nil, err
 	}
@@ -46,31 +72,8 @@ func OpenWithSQS(svc *sqs.SQS) (*Connector, error) {
 	}, nil
 }
 
-func init() {
-	jobworker.Register("sqs", &Provider{})
-}
-
-type Provider struct {
-}
-
-func (Provider) Open(attrs map[string]interface{}) (jobworker.Connector, error) {
-	return Open(attrs)
-}
-
-const (
-	connName  = "sqs"
-	pkgName   = "aws-sqs-connector"
-	logPrefix = "[" + pkgName + "]"
-
-	connAttributeNameAwsRegion          = "Region"
-	connAttributeNameAwsAccessKeyID     = "AccessKeyID"
-	connAttributeNameAwsSecretAccessKey = "SecretAccessKey"
-	connAttributeNameAwsSessionToken    = "SessionToken"
-	connAttributeNameNumMaxRetries      = "NumMaxRetries"
-)
-
 type values struct {
-	region          *string
+	region          string
 	accessKeyID     string
 	secretAccessKey string
 	sessionToken    string
@@ -79,7 +82,7 @@ type values struct {
 
 func (v *values) applyDefaultValues() {
 	if v.numMaxRetries == nil {
-		i := 3
+		i := defaultNumMaxRetries
 		v.numMaxRetries = &i
 	}
 }
@@ -90,7 +93,7 @@ func connAttrsToValues(attrs map[string]interface{}) *values {
 		switch k {
 		case connAttributeNameAwsRegion:
 			s := v.(string)
-			values.region = &s
+			values.region = s
 		case connAttributeNameAwsAccessKeyID:
 			s := v.(string)
 			values.accessKeyID = s
@@ -119,7 +122,7 @@ func (c *Connector) Name() string {
 	return c.name
 }
 
-func (c *Connector) Subscribe(ctx context.Context, input *jobworker.SubscribeInput, opts ...func(*jobworker.Option)) (*jobworker.SubscribeOutput, error) {
+func (c *Connector) Subscribe(ctx context.Context, input *jobworker.SubscribeInput) (*jobworker.SubscribeOutput, error) {
 	queue, err := c.resolveQueue(ctx, input.Queue)
 	if err != nil {
 		return nil, err
@@ -132,7 +135,7 @@ func (c *Connector) Subscribe(ctx context.Context, input *jobworker.SubscribeInp
 
 }
 
-func (c *Connector) Enqueue(ctx context.Context, input *jobworker.EnqueueInput, opts ...func(*jobworker.Option)) (*jobworker.EnqueueOutput, error) {
+func (c *Connector) Enqueue(ctx context.Context, input *jobworker.EnqueueInput) (*jobworker.EnqueueOutput, error) {
 	queue, err := c.resolveQueue(ctx, input.Queue)
 	if err != nil {
 		// TODO
@@ -145,7 +148,7 @@ func (c *Connector) Enqueue(ctx context.Context, input *jobworker.EnqueueInput, 
 	return &jobworker.EnqueueOutput{}, nil
 }
 
-func (c *Connector) EnqueueBatch(ctx context.Context, input *jobworker.EnqueueBatchInput, opts ...func(*jobworker.Option)) (*jobworker.EnqueueBatchOutput, error) {
+func (c *Connector) EnqueueBatch(ctx context.Context, input *jobworker.EnqueueBatchInput) (*jobworker.EnqueueBatchOutput, error) {
 
 	queue, err := c.resolveQueue(ctx, input.Queue)
 	if err != nil {
@@ -267,8 +270,8 @@ func newSendMessageBatchRequestEntry(id string, payload string,
 	return &entry
 }
 
-func (c *Connector) CompleteJob(ctx context.Context, input *jobworker.CompleteJobInput, opts ...func(*jobworker.Option)) (*jobworker.CompleteJobOutput, error) {
-	queue, err := c.resolveQueue(ctx, input.Job.Queue())
+func (c *Connector) CompleteJob(ctx context.Context, input *jobworker.CompleteJobInput) (*jobworker.CompleteJobOutput, error) {
+	queue, err := c.resolveQueue(ctx, input.Job.QueueName())
 	if err != nil {
 		// TODO
 		return nil, err
@@ -284,7 +287,7 @@ func (c *Connector) CompleteJob(ctx context.Context, input *jobworker.CompleteJo
 	return &jobworker.CompleteJobOutput{}, nil
 }
 
-func (c *Connector) FailJob(ctx context.Context, input *jobworker.FailJobInput, opts ...func(*jobworker.Option)) (*jobworker.FailJobOutput, error) {
+func (c *Connector) FailJob(ctx context.Context, input *jobworker.FailJobInput) (*jobworker.FailJobOutput, error) {
 	_, err := c.ChangeJobVisibility(ctx, &ChangeJobVisibilityInput{
 		Job:               input.Job,
 		VisibilityTimeout: 0,
@@ -347,8 +350,8 @@ func (c *Connector) verbose() bool {
 	return c.loggerFunc != nil
 }
 
-func (c *Connector) ChangeJobVisibility(ctx context.Context, input *ChangeJobVisibilityInput, opts ...func(*jobworker.Option)) (*ChangeJobVisibilityOutput, error) {
-	queue, err := c.resolveQueue(ctx, input.Job.Queue())
+func (c *Connector) ChangeJobVisibility(ctx context.Context, input *ChangeJobVisibilityInput) (*ChangeJobVisibilityOutput, error) {
+	queue, err := c.resolveQueue(ctx, input.Job.QueueName())
 	if err != nil {
 		// TODO
 		return nil, err
@@ -361,7 +364,7 @@ func (c *Connector) ChangeJobVisibility(ctx context.Context, input *ChangeJobVis
 	return &ChangeJobVisibilityOutput{}, nil
 }
 
-func (c *Connector) CreateQueue(ctx context.Context, input *CreateQueueInput, opts ...func(*jobworker.Option)) (*CreateQueueOutput, error) {
+func (c *Connector) CreateQueue(ctx context.Context, input *CreateQueueInput) (*CreateQueueOutput, error) {
 
 	attributes := make(map[string]*string)
 	for k, v := range input.Attributes {
@@ -380,7 +383,7 @@ func (c *Connector) CreateQueue(ctx context.Context, input *CreateQueueInput, op
 	return &CreateQueueOutput{}, nil
 }
 
-func (c *Connector) UpdateQueue(ctx context.Context, input *UpdateQueueInput, opts ...func(*jobworker.Option)) (*UpdateQueueOutput, error) {
+func (c *Connector) UpdateQueue(ctx context.Context, input *UpdateQueueInput) (*UpdateQueueOutput, error) {
 	queue, err := c.resolveQueue(ctx, input.Name)
 	if err != nil {
 		// TODO
