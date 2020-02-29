@@ -1,6 +1,6 @@
 # aws-sqs-connector
 
-A jobworker connector with Amazon SQS for [go-job-worker-development-kit/jobworker](https://github.com/go-job-worker-development-kit/jobworker) package.
+A jobworker connector with Amazon SQS for [go-jwdk/jobworker](https://github.com/go-jwdk/jobworker) package.
 
 ## Requirements
 
@@ -11,14 +11,14 @@ Go 1.13+
 This package can be installed with the go get command:
 
 ```
-$ go get -u github.com/go-job-worker-development-kit/aws-sqs-connector
+$ go get -u github.com/go-jwdk/aws-sqs-connector
 ```
 
 ## Usage
 
 ```go
-import "github.com/go-job-worker-development-kit/jobworker"
-import _ "github.com/go-job-worker-development-kit/aws-sqs-connector/sqs"
+import "github.com/go-jwdk/jobworker"
+import _ "github.com/go-jwdk/aws-sqs-connector/sqs"
 
 conn, err := jobworker.Open("sqs", map[string]interface{}{
 		"Region":          os.Getenv("REGION"),

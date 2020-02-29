@@ -4,7 +4,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 
 	"github.com/aws/aws-sdk-go/service/sqs"
-	"github.com/go-job-worker-development-kit/jobworker"
+	"github.com/go-jwdk/jobworker"
 )
 
 func newJob(queue string, msg *sqs.Message, conn jobworker.Connector) *jobworker.Job {

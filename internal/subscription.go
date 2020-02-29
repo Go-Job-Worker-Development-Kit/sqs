@@ -10,7 +10,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/service/sqs"
 
-	"github.com/go-job-worker-development-kit/jobworker"
+	"github.com/go-jwdk/jobworker"
 )
 
 const (

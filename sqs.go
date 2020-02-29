@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/go-job-worker-development-kit/aws-sqs-connector/internal"
-	"github.com/go-job-worker-development-kit/jobworker"
+	"github.com/go-jwdk/aws-sqs-connector/internal"
+	"github.com/go-jwdk/jobworker"
 
 	uuid "github.com/satori/go.uuid"
 
