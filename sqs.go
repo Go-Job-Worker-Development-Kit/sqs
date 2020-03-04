@@ -271,14 +271,14 @@ func newSendMessageBatchRequestEntry(id string, payload string,
 }
 
 func (c *Connector) CompleteJob(ctx context.Context, input *jobworker.CompleteJobInput) (*jobworker.CompleteJobOutput, error) {
-	queue, err := c.resolveQueue(ctx, input.Job.QueueName())
+	queue, err := c.resolveQueue(ctx, input.Job.QueueName)
 	if err != nil {
 		// TODO
 		return nil, err
 	}
 	_, err = c.svc.DeleteMessageWithContext(ctx, &sqs.DeleteMessageInput{
 		QueueUrl:      &queue.URL,
-		ReceiptHandle: aws.String(input.Job.Payload().Metadata["ReceiptID"]),
+		ReceiptHandle: aws.String(input.Job.Metadata["ReceiptID"]),
 	})
 	if err != nil {
 		// TODO handle already delete error
@@ -351,13 +351,13 @@ func (c *Connector) verbose() bool {
 }
 
 func (c *Connector) ChangeJobVisibility(ctx context.Context, input *ChangeJobVisibilityInput) (*ChangeJobVisibilityOutput, error) {
-	queue, err := c.resolveQueue(ctx, input.Job.QueueName())
+	queue, err := c.resolveQueue(ctx, input.Job.QueueName)
 	if err != nil {
 		// TODO
 		return nil, err
 	}
 	_, err = c.svc.ChangeMessageVisibilityWithContext(ctx, &sqs.ChangeMessageVisibilityInput{
-		ReceiptHandle:     aws.String(input.Job.Payload().Metadata["ReceiptID"]),
+		ReceiptHandle:     aws.String(input.Job.Metadata["ReceiptID"]),
 		QueueUrl:          aws.String(queue.URL),
 		VisibilityTimeout: aws.Int64(input.VisibilityTimeout),
 	})

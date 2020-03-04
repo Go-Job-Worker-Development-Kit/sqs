@@ -7,13 +7,15 @@ import (
 	"github.com/go-jwdk/jobworker"
 )
 
-func newJob(queue string, msg *sqs.Message, conn jobworker.Connector) *jobworker.Job {
-	var payload jobworker.Payload
-	payload.Content = aws.StringValue(msg.Body)
-	payload.Metadata = newMetadata(msg)
-	payload.CustomAttribute = newCustomAttribute(msg)
-	payload.Raw = msg
-	return jobworker.NewJob(conn, queue, &payload)
+func newJob(queueName string, msg *sqs.Message, conn jobworker.Connector) *jobworker.Job {
+	return &jobworker.Job{
+		Conn:            conn,
+		QueueName:       queueName,
+		Content:         aws.StringValue(msg.Body),
+		Metadata:        newMetadata(msg),
+		CustomAttribute: newCustomAttribute(msg),
+		Raw:             msg,
+	}
 }
 
 // Metadata value examples below:
