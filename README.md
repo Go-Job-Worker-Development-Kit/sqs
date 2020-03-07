@@ -22,7 +22,30 @@ import _ "github.com/go-jwdk/aws-sqs-connector/sqs"
 
 conn, err := jobworker.Open("sqs", map[string]interface{}{
 		"Region":          os.Getenv("REGION"),
-		"AccessKeyID":     os.Getenv("ACCESS_KEY_ID"),
-		"SecretAccessKey": os.Getenv("SECRET_ACCESS_KEY"),
 	})
 ```
+
+## Connection Params
+
+| Key | Value | Required | Description |
+|:---|:---|:---|:---|
+|Region |string |true |The region to send requests to |
+|AccessKeyID |string |false |AWS Access key ID |
+|SecretAccessKey |string |false |AWS Secret Access Key |
+|SessionToken |string |false |AWS Session Token |
+|NumMaxRetries |int |false |The maximum number of times that a request will be retried for failures |
+
+
+## Metadata String
+
+| Key | Value | Description |
+|:---|:---|:---|
+|DeduplicationID |string |? |
+|GroupID |string |? |
+|InvisibleUntil |? |? |
+|RetryCount |? |? |
+|EnqueueAt |? |? |
+|MessageId |? |? |
+|ReceiptHandle |? |? |
+|MD5OfBody |? |? |
+|MD5OfMessageAttributes |? |? |
