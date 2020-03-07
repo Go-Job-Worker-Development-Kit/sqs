@@ -18,6 +18,17 @@ func newJob(queueName string, msg *sqs.Message, conn jobworker.Connector) *jobwo
 	}
 }
 
+const (
+	MetadataKeyMessageId              = "MessageId"
+	MetadataKeyReceiptHandle          = "ReceiptHandle"
+	MetadataKeyMD5OfBody              = "MD5OfBody"
+	MetadataKeyMD5OfMessageAttributes = "MD5OfMessageAttributes"
+
+	MetadataKeyMessageDeduplicationID = "MessageDeduplicationID"
+	MetadataKeyMessageGroupID         = "MessageGroupID"
+	MetadataKeyMessageDelaySeconds    = "MessageDelaySeconds"
+)
+
 func newMetadata(msg *sqs.Message) map[string]string {
 	metadata := make(map[string]string)
 	metadata = make(map[string]string)
@@ -26,10 +37,10 @@ func newMetadata(msg *sqs.Message) map[string]string {
 			metadata[k] = aws.StringValue(v)
 		}
 	}
-	metadata["MessageId"] = aws.StringValue(msg.MessageId)
-	metadata["ReceiptHandle"] = aws.StringValue(msg.ReceiptHandle)
-	metadata["MD5OfBody"] = aws.StringValue(msg.MD5OfBody)
-	metadata["MD5OfMessageAttributes"] = aws.StringValue(msg.MD5OfMessageAttributes)
+	metadata[MetadataKeyMessageId] = aws.StringValue(msg.MessageId)
+	metadata[MetadataKeyReceiptHandle] = aws.StringValue(msg.ReceiptHandle)
+	metadata[MetadataKeyMD5OfBody] = aws.StringValue(msg.MD5OfBody)
+	metadata[MetadataKeyMD5OfMessageAttributes] = aws.StringValue(msg.MD5OfMessageAttributes)
 	return metadata
 }
 

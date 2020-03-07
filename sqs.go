@@ -5,15 +5,13 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/go-jwdk/aws-sqs-connector/internal"
-	"github.com/go-jwdk/jobworker"
-
-	uuid "github.com/satori/go.uuid"
-
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sqs"
+	"github.com/go-jwdk/aws-sqs-connector/internal"
+	"github.com/go-jwdk/jobworker"
+	uuid "github.com/satori/go.uuid"
 )
 
 const (
@@ -192,20 +190,20 @@ func newSendMessageInput(payload string, metadata map[string]string, attr map[st
 		}
 	}
 
-	if v, ok := queue.Attributes["FifoQueue"]; ok && aws.StringValue(v) == "true" {
+	if v, ok := queue.Attributes[internal.QueueAttributeKeyFifoQueue]; ok && aws.StringValue(v) == "true" {
 
 		// fifo only
-		messageGroupId := metadata["MessageGroupID"]
+		messageGroupId := metadata[internal.MetadataKeyMessageGroupID]
 		if messageGroupId == "" {
 			messageGroupId = "default"
 		}
 		input.MessageGroupId = aws.String(messageGroupId)
 
-		if metadata["MessageDeduplicationID"] != "" {
-			input.MessageDeduplicationId = aws.String(metadata["MessageDeduplicationID"])
+		if v := metadata[internal.MetadataKeyMessageDeduplicationID]; v != "" {
+			input.MessageDeduplicationId = aws.String(v)
 		}
 
-		if v, ok := queue.Attributes["ContentBasedDeduplication"]; ok && aws.StringValue(v) != "true" {
+		if v, ok := queue.Attributes[internal.QueueAttributeKeyContentBasedDeduplication]; ok && aws.StringValue(v) != "true" {
 			if input.MessageDeduplicationId == nil {
 				id := uuid.NewV4().String()
 				input.MessageDeduplicationId = aws.String(id)
@@ -214,7 +212,7 @@ func newSendMessageInput(payload string, metadata map[string]string, attr map[st
 
 	} else {
 		// standard only
-		v, ok := metadata["DelaySeconds"]
+		v, ok := metadata[internal.MetadataKeyMessageDelaySeconds]
 		if ok {
 			delaySeconds, _ := strconv.ParseInt(v, 10, 64)
 			input.DelaySeconds = aws.Int64(delaySeconds)
@@ -238,20 +236,20 @@ func newSendMessageBatchRequestEntry(id string, payload string,
 		}
 	}
 
-	if v, ok := queue.Attributes["FifoQueue"]; ok && aws.StringValue(v) == "true" {
+	if v, ok := queue.Attributes[internal.QueueAttributeKeyFifoQueue]; ok && aws.StringValue(v) == "true" {
 
 		// fifo only
-		messageGroupId := metadata["MessageGroupID"]
+		messageGroupId := metadata[internal.MetadataKeyMessageGroupID]
 		if messageGroupId == "" {
 			messageGroupId = "default"
 		}
 		entry.MessageGroupId = aws.String(messageGroupId)
 
-		if metadata["MessageDeduplicationID"] != "" {
-			entry.MessageDeduplicationId = aws.String(metadata["MessageDeduplicationID"])
+		if v := metadata[internal.MetadataKeyMessageDeduplicationID]; v != "" {
+			entry.MessageDeduplicationId = aws.String(v)
 		}
 
-		if v, ok := queue.Attributes["ContentBasedDeduplication"]; ok && aws.StringValue(v) != "true" {
+		if v, ok := queue.Attributes[internal.QueueAttributeKeyContentBasedDeduplication]; ok && aws.StringValue(v) != "true" {
 			if entry.MessageDeduplicationId == nil {
 				id := uuid.NewV4().String()
 				entry.MessageDeduplicationId = aws.String(id)
@@ -260,7 +258,7 @@ func newSendMessageBatchRequestEntry(id string, payload string,
 
 	} else {
 		// standard only
-		v, ok := metadata["DelaySeconds"]
+		v, ok := metadata[internal.MetadataKeyMessageDelaySeconds]
 		if ok {
 			delaySeconds, _ := strconv.ParseInt(v, 10, 64)
 			entry.DelaySeconds = aws.Int64(delaySeconds)
@@ -278,7 +276,7 @@ func (c *Connector) CompleteJob(ctx context.Context, input *jobworker.CompleteJo
 	}
 	_, err = c.svc.DeleteMessageWithContext(ctx, &sqs.DeleteMessageInput{
 		QueueUrl:      &queue.URL,
-		ReceiptHandle: aws.String(input.Job.Metadata["ReceiptHandle"]),
+		ReceiptHandle: aws.String(input.Job.Metadata[internal.MetadataKeyReceiptHandle]),
 	})
 	if err != nil {
 		// TODO handle already delete error
@@ -357,7 +355,7 @@ func (c *Connector) ChangeJobVisibility(ctx context.Context, input *ChangeJobVis
 		return nil, err
 	}
 	_, err = c.svc.ChangeMessageVisibilityWithContext(ctx, &sqs.ChangeMessageVisibilityInput{
-		ReceiptHandle:     aws.String(input.Job.Metadata["ReceiptHandle"]),
+		ReceiptHandle:     aws.String(input.Job.Metadata[internal.MetadataKeyReceiptHandle]),
 		QueueUrl:          aws.String(queue.URL),
 		VisibilityTimeout: aws.Int64(input.VisibilityTimeout),
 	})

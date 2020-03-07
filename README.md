@@ -37,6 +37,8 @@ func main() {
 
 ### Using SQS instances directly
 
+If you want to use more SQS advanced options.
+
 ```go
 package main
 
@@ -104,4 +106,4 @@ func main() {
 |:---|:---|:---|
 |MessageDeduplicationId |string |The token used for deduplication of sent messages. |
 |MessageGroupId |string |The tag that specifies that a message belongs to a specific message group. |
-|DelaySeconds |int64 |The length of time, in seconds, for which the delivery of all messages in the queue is delayed. |
+|MessageDelaySeconds |int64 |The length of time, in seconds, for which the delivery of all messages in the queue is delayed. |
