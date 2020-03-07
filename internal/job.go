@@ -18,19 +18,6 @@ func newJob(queueName string, msg *sqs.Message, conn jobworker.Connector) *jobwo
 	}
 }
 
-// Metadata value examples below:
-//
-// SecID                  uint64
-// ReceiptID              string
-// DeduplicationID        string
-// GroupID                string
-// InvisibleUntil         int64
-// RetryCount             int64
-// EnqueueAt              int64
-// MessageId              string
-// ReceiptHandle          string
-// MD5OfBody              string
-// MD5OfMessageAttributes string
 func newMetadata(msg *sqs.Message) map[string]string {
 	metadata := make(map[string]string)
 	metadata = make(map[string]string)

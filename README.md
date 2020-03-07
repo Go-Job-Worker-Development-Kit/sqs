@@ -16,13 +16,56 @@ $ go get -u github.com/go-jwdk/aws-sqs-connector
 
 ## Usage
 
-```go
-import "github.com/go-jwdk/jobworker"
-import _ "github.com/go-jwdk/aws-sqs-connector/sqs"
+### Basic
 
-conn, err := jobworker.Open("sqs", map[string]interface{}{
-		"Region":          os.Getenv("REGION"),
-	})
+```go
+package main
+
+import (
+	jw "github.com/go-jwdk/jobworker"
+    _ "github.com/go-jwdk/aws-sqs-connector"
+)
+
+func main() {
+    conn, err := jw.Open("sqs", map[string]interface{}{
+        "Region": "us-east-1",
+    })
+    
+    ...
+}
+```
+
+### Using SQS instances directly
+
+```go
+package main
+
+import (
+	...
+
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/sqs"
+
+	sqsc "github.com/go-jwdk/aws-sqs-connector"
+	"github.com/go-jwdk/jobworker"
+)
+
+func main() {
+	awsCfg := &aws.Config{
+		Region:     aws.String("us-east-1"),
+		MaxRetries: aws.Int(5),
+	}
+	sess, err := session.NewSession(&awsCfg)
+	if err != nil {
+		panic(err)
+	}
+	svc := sqs.New(sess)
+
+	conn, err := sqsc.OpenWithSQS(svc)
+	
+	...
+}
 ```
 
 ## Connection Params
@@ -34,7 +77,6 @@ conn, err := jobworker.Open("sqs", map[string]interface{}{
 |SecretAccessKey |string |false |AWS Secret Access Key |
 |SessionToken |string |false |AWS Session Token |
 |NumMaxRetries |int |false |The maximum number of times that a request will be retried for failures |
-
 
 ## Metadata String
 
@@ -56,7 +98,7 @@ conn, err := jobworker.Open("sqs", map[string]interface{}{
 |AWSTraceHeader |- |- |[API_ReceiveMessage.html](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/APIReference/API_ReceiveMessage.html) |
 |AWSTraceHeader |- |- |[API_ReceiveMessage.html](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/APIReference/API_ReceiveMessage.html) |
 
-## Enqueue Job
+### Enqueue Job
 
 | Key | Value | Description |
 |:---|:---|:---|

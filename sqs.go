@@ -195,14 +195,14 @@ func newSendMessageInput(payload string, metadata map[string]string, attr map[st
 	if v, ok := queue.Attributes["FifoQueue"]; ok && aws.StringValue(v) == "true" {
 
 		// fifo only
-		messageGroupId := metadata["GroupID"]
+		messageGroupId := metadata["MessageGroupID"]
 		if messageGroupId == "" {
 			messageGroupId = "default"
 		}
 		input.MessageGroupId = aws.String(messageGroupId)
 
-		if metadata["DeduplicationID"] != "" {
-			input.MessageDeduplicationId = aws.String(metadata["DeduplicationID"])
+		if metadata["MessageDeduplicationID"] != "" {
+			input.MessageDeduplicationId = aws.String(metadata["MessageDeduplicationID"])
 		}
 
 		if v, ok := queue.Attributes["ContentBasedDeduplication"]; ok && aws.StringValue(v) != "true" {
@@ -241,14 +241,14 @@ func newSendMessageBatchRequestEntry(id string, payload string,
 	if v, ok := queue.Attributes["FifoQueue"]; ok && aws.StringValue(v) == "true" {
 
 		// fifo only
-		messageGroupId := metadata["GroupID"]
+		messageGroupId := metadata["MessageGroupID"]
 		if messageGroupId == "" {
 			messageGroupId = "default"
 		}
 		entry.MessageGroupId = aws.String(messageGroupId)
 
-		if metadata["DeduplicationID"] != "" {
-			entry.MessageDeduplicationId = aws.String(metadata["DeduplicationID"])
+		if metadata["MessageDeduplicationID"] != "" {
+			entry.MessageDeduplicationId = aws.String(metadata["MessageDeduplicationID"])
 		}
 
 		if v, ok := queue.Attributes["ContentBasedDeduplication"]; ok && aws.StringValue(v) != "true" {
@@ -278,7 +278,7 @@ func (c *Connector) CompleteJob(ctx context.Context, input *jobworker.CompleteJo
 	}
 	_, err = c.svc.DeleteMessageWithContext(ctx, &sqs.DeleteMessageInput{
 		QueueUrl:      &queue.URL,
-		ReceiptHandle: aws.String(input.Job.Metadata["ReceiptID"]),
+		ReceiptHandle: aws.String(input.Job.Metadata["ReceiptHandle"]),
 	})
 	if err != nil {
 		// TODO handle already delete error
@@ -357,7 +357,7 @@ func (c *Connector) ChangeJobVisibility(ctx context.Context, input *ChangeJobVis
 		return nil, err
 	}
 	_, err = c.svc.ChangeMessageVisibilityWithContext(ctx, &sqs.ChangeMessageVisibilityInput{
-		ReceiptHandle:     aws.String(input.Job.Metadata["ReceiptID"]),
+		ReceiptHandle:     aws.String(input.Job.Metadata["ReceiptHandle"]),
 		QueueUrl:          aws.String(queue.URL),
 		VisibilityTimeout: aws.Int64(input.VisibilityTimeout),
 	})
