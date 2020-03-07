@@ -40,20 +40,21 @@ conn, err := jobworker.Open("sqs", map[string]interface{}{
 
 ### Received Job
 
-| Key | Value | Description |
-|:---|:---|:---|
-|MessageId |? |? |
-|ReceiptHandle |? |? |
-|MD5OfBody |? |? |
-|MD5OfMessageAttributes |? |? |
-|ApproximateReceiveCount |string |? |
-|ApproximateFirstReceiveTimestamp |? |? |
-|MessageDeduplicationId |? |? |
-|MessageGroupId |? |? |
-|SenderId |? |? |
-|SentTimestamp |string |? |
-|SequenceNumber |? |? |
-|AWSTraceHeader |? |? |
+| Key | Value | Description |Ref |
+|:---|:---|:---|:---|
+|MessageId |string |A unique identifier for the message. |- |
+|ReceiptHandle |string |An identifier associated with the act of receiving the message. |- |
+|MD5OfBody |string |An MD5 digest of the non-URL-encoded message body string. |
+|MD5OfMessageAttributes |string|An MD5 digest of the non-URL-encoded message body string. |- |
+|ApproximateReceiveCount |- |- |[API_ReceiveMessage.html](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/APIReference/API_ReceiveMessage.html) |
+|ApproximateFirstReceiveTimestamp |- |- |[API_ReceiveMessage.html](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/APIReference/API_ReceiveMessage.html) |
+|MessageDeduplicationId |- |- |[API_ReceiveMessage.html](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/APIReference/API_ReceiveMessage.html) |
+|MessageGroupId |- |- |[API_ReceiveMessage.html](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/APIReference/API_ReceiveMessage.html) |
+|SenderId |- |- |[API_ReceiveMessage.html](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/APIReference/API_ReceiveMessage.html) |
+|SentTimestamp |- |- |[API_ReceiveMessage.html](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/APIReference/API_ReceiveMessage.html) |
+|SequenceNumber |- |- |[API_ReceiveMessage.html](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/APIReference/API_ReceiveMessage.html) |
+|AWSTraceHeader |- |- |[API_ReceiveMessage.html](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/APIReference/API_ReceiveMessage.html) |
+|AWSTraceHeader |- |- |[API_ReceiveMessage.html](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/APIReference/API_ReceiveMessage.html) |
 
 ## Enqueue Job
 
