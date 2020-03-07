@@ -140,7 +140,8 @@ func (c *Connector) Enqueue(ctx context.Context, input *jobworker.EnqueueInput) 
 		// TODO
 		return nil, err
 	}
-	_, err = c.svc.SendMessageWithContext(ctx, newSendMessageInput(input.Payload, input.Metadata, input.CustomAttribute, queue))
+	sendMessageInput := newSendMessageInput(input.Content, input.Metadata, input.CustomAttribute, queue)
+	_, err = c.svc.SendMessageWithContext(ctx, sendMessageInput)
 	if err != nil {
 		return nil, err
 	}
@@ -177,17 +178,19 @@ func (c *Connector) EnqueueBatch(ctx context.Context, input *jobworker.EnqueueBa
 	return &output, err
 }
 
-func newSendMessageInput(payload string, metadata map[string]string, attr map[string]*jobworker.CustomAttribute, queue *internal.Queue) *sqs.SendMessageInput {
+func newSendMessageInput(content string, metadata map[string]string, attr map[string]*jobworker.CustomAttribute, queue *internal.Queue) *sqs.SendMessageInput {
 	var input sqs.SendMessageInput
-	input.MessageBody = aws.String(payload)
+	input.MessageBody = aws.String(content)
 	input.QueueUrl = aws.String(queue.URL)
 
-	input.MessageAttributes = make(map[string]*sqs.MessageAttributeValue)
-	for k, v := range attr {
-		input.MessageAttributes[k] = &sqs.MessageAttributeValue{
-			DataType:    aws.String(v.DataType),
-			StringValue: aws.String(v.StringValue),
-			BinaryValue: v.BinaryValue,
+	if len(attr) > 0 {
+		input.MessageAttributes = make(map[string]*sqs.MessageAttributeValue)
+		for k, v := range attr {
+			input.MessageAttributes[k] = &sqs.MessageAttributeValue{
+				DataType:    aws.String(v.DataType),
+				StringValue: aws.String(v.StringValue),
+				BinaryValue: v.BinaryValue,
+			}
 		}
 	}
 
@@ -223,11 +226,11 @@ func newSendMessageInput(payload string, metadata map[string]string, attr map[st
 	return &input
 }
 
-func newSendMessageBatchRequestEntry(id string, payload string,
+func newSendMessageBatchRequestEntry(id string, content string,
 	metadata map[string]string, attr map[string]*jobworker.CustomAttribute, queue *internal.Queue) *sqs.SendMessageBatchRequestEntry {
 	var entry sqs.SendMessageBatchRequestEntry
 	entry.Id = aws.String(id)
-	entry.MessageBody = aws.String(payload)
+	entry.MessageBody = aws.String(content)
 	entry.MessageAttributes = make(map[string]*sqs.MessageAttributeValue)
 	for k, v := range attr {
 		entry.MessageAttributes[k] = &sqs.MessageAttributeValue{
