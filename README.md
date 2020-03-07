@@ -107,3 +107,12 @@ func main() {
 |MessageDeduplicationId |string |The token used for deduplication of sent messages. |
 |MessageGroupId |string |The tag that specifies that a message belongs to a specific message group. |
 |MessageDelaySeconds |int64 |The length of time, in seconds, for which the delivery of all messages in the queue is delayed. |
+
+### Subscribe Queue
+
+| Key | Value | Description |
+|:---|:---|:---|
+|PollingInterval |int64 |If there is no job, wait until the polling interval time (seconds). |
+|VisibilityTimeout |int64 |The duration (in seconds) that the received messages are hidden from subsequent retrieve requests after being retrieved by a ReceiveMessage request. |
+|WaitTimeSeconds |int64 |The duration (in seconds) for which the call waits for a message to arrive in the queue before returning. |
+|MaxNumberOfJobs |int64 |The maximum number of jobs to return. |

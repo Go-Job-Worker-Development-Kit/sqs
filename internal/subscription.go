@@ -3,6 +3,7 @@ package internal
 import (
 	"context"
 	"errors"
+	"strconv"
 	"sync/atomic"
 	"time"
 
@@ -19,19 +20,69 @@ const (
 	subStateClosed  = 2
 )
 
-func NewSubscription(name string, raw *sqs.SQS, conn jobworker.Connector) *Subscription {
+func NewSubscription(name string,
+	raw *sqs.SQS, conn jobworker.Connector, meta map[string]string) *Subscription {
+	pollingInterval, visibilityTimeout, waitTimeSeconds, maxNumberOfMessages := extractMetadata(meta)
 	return &Subscription{
-		name:  name,
-		raw:   raw,
-		conn:  conn,
-		queue: make(chan *jobworker.Job),
+		name:                name,
+		raw:                 raw,
+		conn:                conn,
+		pollingInterval:     pollingInterval,
+		visibilityTimeout:   visibilityTimeout,
+		waitTimeSeconds:     waitTimeSeconds,
+		maxNumberOfMessages: maxNumberOfMessages,
+		queue:               make(chan *jobworker.Job),
+		state:               0,
 	}
 }
 
+func extractMetadata(meta map[string]string) (
+	pollingInterval time.Duration,
+	visibilityTimeout *int64,
+	waitTimeSeconds *int64,
+	maxNumberOfMessages *int64,
+) {
+
+	if v := meta["PollingInterval"]; v != "" {
+		i, err := strconv.ParseInt(v, 10, 64)
+		if err == nil {
+			pollingInterval = time.Duration(i) * time.Second
+		}
+	}
+
+	if v := meta["VisibilityTimeout"]; v != "" {
+		i, err := strconv.ParseInt(v, 10, 64)
+		if err == nil {
+			visibilityTimeout = &i
+		}
+	}
+
+	if v := meta["WaitTimeSeconds"]; v != "" {
+		i, err := strconv.ParseInt(v, 10, 64)
+		if err == nil {
+			waitTimeSeconds = &i
+		}
+	}
+
+	if v := meta["MaxNumberOfJobs"]; v != "" {
+		i, err := strconv.ParseInt(v, 10, 64)
+		if err == nil {
+			maxNumberOfMessages = &i
+		}
+	}
+	return
+}
+
 type Subscription struct {
-	name  string
-	raw   *sqs.SQS
-	conn  jobworker.Connector
+	name string
+	raw  *sqs.SQS
+	conn jobworker.Connector
+
+	pollingInterval     time.Duration
+	visibilityTimeout   *int64
+	waitTimeSeconds     *int64
+	maxNumberOfMessages *int64
+
 	queue chan *jobworker.Job
 	state int32
 }
@@ -61,7 +112,6 @@ func (s *Subscription) ReadLoop() {
 		for {
 
 			if atomic.LoadInt32(&s.state) != subStateActive {
-				// TODO logging
 				return
 			}
 
@@ -74,14 +124,17 @@ func (s *Subscription) ReadLoop() {
 					aws.String(sqs.QueueAttributeNameAll),
 				},
 				QueueUrl: aws.String(s.name),
+
+				VisibilityTimeout:   s.visibilityTimeout,
+				WaitTimeSeconds:     s.waitTimeSeconds,
+				MaxNumberOfMessages: s.maxNumberOfMessages,
 			})
 			if err != nil {
 				close(ch)
-				// TODO logging
 				return
 			}
 			if len(result.Messages) == 0 {
-				time.Sleep(time.Second) // TODO to params
+				time.Sleep(s.pollingInterval)
 				continue
 			}
 			for _, msg := range result.Messages {
