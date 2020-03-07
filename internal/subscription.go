@@ -20,11 +20,11 @@ const (
 	subStateClosed  = 2
 )
 
-func NewSubscription(name string,
+func NewSubscription(queueAttributes *QueueAttributes,
 	raw *sqs.SQS, conn jobworker.Connector, meta map[string]string) *Subscription {
 	pollingInterval, visibilityTimeout, waitTimeSeconds, maxNumberOfMessages := extractMetadata(meta)
 	return &Subscription{
-		name:                name,
+		queueAttributes:     queueAttributes,
 		raw:                 raw,
 		conn:                conn,
 		pollingInterval:     pollingInterval,
@@ -32,7 +32,7 @@ func NewSubscription(name string,
 		waitTimeSeconds:     waitTimeSeconds,
 		maxNumberOfMessages: maxNumberOfMessages,
 		queue:               make(chan *jobworker.Job),
-		state:               0,
+		state:               subStateActive,
 	}
 }
 
@@ -74,9 +74,9 @@ func extractMetadata(meta map[string]string) (
 }
 
 type Subscription struct {
-	name string
-	raw  *sqs.SQS
-	conn jobworker.Connector
+	queueAttributes *QueueAttributes
+	raw             *sqs.SQS
+	conn            jobworker.Connector
 
 	pollingInterval     time.Duration
 	visibilityTimeout   *int64
@@ -112,6 +112,7 @@ func (s *Subscription) ReadLoop() {
 		for {
 
 			if atomic.LoadInt32(&s.state) != subStateActive {
+				close(ch)
 				return
 			}
 
@@ -123,7 +124,7 @@ func (s *Subscription) ReadLoop() {
 				MessageAttributeNames: []*string{
 					aws.String(sqs.QueueAttributeNameAll),
 				},
-				QueueUrl: aws.String(s.name),
+				QueueUrl: aws.String(s.queueAttributes.URL),
 
 				VisibilityTimeout:   s.visibilityTimeout,
 				WaitTimeSeconds:     s.waitTimeSeconds,
@@ -152,7 +153,7 @@ func (s *Subscription) ReadLoop() {
 			}
 			return
 		}
-		s.queue <- newJob(s.name, msg, s.conn)
+		s.queue <- newJob(s.queueAttributes.Name, msg, s.conn)
 	}
 }
 

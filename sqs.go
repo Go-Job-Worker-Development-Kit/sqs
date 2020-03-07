@@ -126,7 +126,7 @@ func (c *Connector) Subscribe(ctx context.Context, input *jobworker.SubscribeInp
 		return nil, err
 	}
 
-	sub := internal.NewSubscription(queue.URL, c.svc, c, input.Metadata)
+	sub := internal.NewSubscription(queue, c.svc, c, input.Metadata)
 	go sub.ReadLoop()
 	return &jobworker.SubscribeOutput{
 		Subscription: sub,
@@ -178,7 +178,7 @@ func (c *Connector) EnqueueBatch(ctx context.Context, input *jobworker.EnqueueBa
 	return &output, err
 }
 
-func newSendMessageInput(content string, metadata map[string]string, attr map[string]*jobworker.CustomAttribute, queue *internal.Queue) *sqs.SendMessageInput {
+func newSendMessageInput(content string, metadata map[string]string, attr map[string]*jobworker.CustomAttribute, queue *internal.QueueAttributes) *sqs.SendMessageInput {
 	var input sqs.SendMessageInput
 	input.MessageBody = aws.String(content)
 	input.QueueUrl = aws.String(queue.URL)
@@ -194,7 +194,7 @@ func newSendMessageInput(content string, metadata map[string]string, attr map[st
 		}
 	}
 
-	if v, ok := queue.Attributes[internal.QueueAttributeKeyFifoQueue]; ok && aws.StringValue(v) == "true" {
+	if v, ok := queue.RawAttributes[internal.QueueAttributeKeyFifoQueue]; ok && aws.StringValue(v) == "true" {
 
 		// fifo only
 		messageGroupId := metadata[internal.MetadataKeyMessageGroupID]
@@ -207,7 +207,7 @@ func newSendMessageInput(content string, metadata map[string]string, attr map[st
 			input.MessageDeduplicationId = aws.String(v)
 		}
 
-		if v, ok := queue.Attributes[internal.QueueAttributeKeyContentBasedDeduplication]; ok && aws.StringValue(v) != "true" {
+		if v, ok := queue.RawAttributes[internal.QueueAttributeKeyContentBasedDeduplication]; ok && aws.StringValue(v) != "true" {
 			if input.MessageDeduplicationId == nil {
 				id := uuid.NewV4().String()
 				input.MessageDeduplicationId = aws.String(id)
@@ -227,7 +227,7 @@ func newSendMessageInput(content string, metadata map[string]string, attr map[st
 }
 
 func newSendMessageBatchRequestEntry(id string, content string,
-	metadata map[string]string, attr map[string]*jobworker.CustomAttribute, queue *internal.Queue) *sqs.SendMessageBatchRequestEntry {
+	metadata map[string]string, attr map[string]*jobworker.CustomAttribute, queue *internal.QueueAttributes) *sqs.SendMessageBatchRequestEntry {
 	var entry sqs.SendMessageBatchRequestEntry
 	entry.Id = aws.String(id)
 	entry.MessageBody = aws.String(content)
@@ -240,7 +240,7 @@ func newSendMessageBatchRequestEntry(id string, content string,
 		}
 	}
 
-	if v, ok := queue.Attributes[internal.QueueAttributeKeyFifoQueue]; ok && aws.StringValue(v) == "true" {
+	if v, ok := queue.RawAttributes[internal.QueueAttributeKeyFifoQueue]; ok && aws.StringValue(v) == "true" {
 
 		// fifo only
 		messageGroupId := metadata[internal.MetadataKeyMessageGroupID]
@@ -253,7 +253,7 @@ func newSendMessageBatchRequestEntry(id string, content string,
 			entry.MessageDeduplicationId = aws.String(v)
 		}
 
-		if v, ok := queue.Attributes[internal.QueueAttributeKeyContentBasedDeduplication]; ok && aws.StringValue(v) != "true" {
+		if v, ok := queue.RawAttributes[internal.QueueAttributeKeyContentBasedDeduplication]; ok && aws.StringValue(v) != "true" {
 			if entry.MessageDeduplicationId == nil {
 				id := uuid.NewV4().String()
 				entry.MessageDeduplicationId = aws.String(id)
@@ -306,7 +306,7 @@ func (c *Connector) SetLoggerFunc(f jobworker.LoggerFunc) {
 	c.loggerFunc = f
 }
 
-func (c *Connector) resolveQueue(ctx context.Context, name string) (*internal.Queue, error) {
+func (c *Connector) resolveQueue(ctx context.Context, name string) (*internal.QueueAttributes, error) {
 
 	v, ok := c.name2queue.Load(name)
 	if !ok || v == nil {
@@ -330,15 +330,16 @@ func (c *Connector) resolveQueue(ctx context.Context, name string) (*internal.Qu
 			return nil, err
 		}
 
-		v = &internal.Queue{
-			URL:        aws.StringValue(urlOutput.QueueUrl),
-			Attributes: attrsOutput.Attributes,
+		v = &internal.QueueAttributes{
+			Name:          name,
+			URL:           aws.StringValue(urlOutput.QueueUrl),
+			RawAttributes: attrsOutput.Attributes,
 		}
 
 		c.name2queue.Store(name, v)
 	}
 
-	return v.(*internal.Queue), nil
+	return v.(*internal.QueueAttributes), nil
 }
 
 func (c *Connector) debug(args ...interface{}) {
@@ -462,8 +463,8 @@ func (c *Connector) UpdateQueue(ctx context.Context, input *UpdateQueueInput) (*
 //		}
 //	}
 //
-//	messageDeduplicationId := reviveMsg.Attributes[sqs.MessageSystemAttributeNameMessageDeduplicationId]
-//	messageGroupId := reviveMsg.Attributes[sqs.MessageSystemAttributeNameMessageGroupId]
+//	messageDeduplicationId := reviveMsg.RawAttributes[sqs.MessageSystemAttributeNameMessageDeduplicationId]
+//	messageGroupId := reviveMsg.RawAttributes[sqs.MessageSystemAttributeNameMessageGroupId]
 //	class := reviveMsg.MessageAttributes[messageAttributeNameJobClass]
 //
 //	_, err = c.svc.SendMessageWithContext(ctx, &sqs.SendMessageInput{

@@ -1,8 +1,9 @@
 package internal
 
-type Queue struct {
-	URL        string
-	Attributes map[string]*string
+type QueueAttributes struct {
+	Name          string
+	URL           string
+	RawAttributes map[string]*string
 }
 
 const (
