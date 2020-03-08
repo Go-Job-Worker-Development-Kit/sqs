@@ -18,6 +18,11 @@ const (
 	subStateActive  = 0
 	subStateClosing = 1
 	subStateClosed  = 2
+
+	subMetadataKeyPollingInterval   = "PollingInterval"
+	subMetadataKeyVisibilityTimeout = "VisibilityTimeout"
+	subMetadataKeyWaitTimeSeconds   = "WaitTimeSeconds"
+	subMetadataKeyMaxNumberOfJobs   = "MaxNumberOfJobs"
 )
 
 func NewSubscription(queueAttributes *QueueAttributes,
@@ -43,28 +48,28 @@ func extractMetadata(meta map[string]string) (
 	maxNumberOfMessages *int64,
 ) {
 
-	if v := meta["PollingInterval"]; v != "" {
+	if v := meta[subMetadataKeyPollingInterval]; v != "" {
 		i, err := strconv.ParseInt(v, 10, 64)
 		if err == nil {
 			pollingInterval = time.Duration(i) * time.Second
 		}
 	}
 
-	if v := meta["VisibilityTimeout"]; v != "" {
+	if v := meta[subMetadataKeyVisibilityTimeout]; v != "" {
 		i, err := strconv.ParseInt(v, 10, 64)
 		if err == nil {
 			visibilityTimeout = &i
 		}
 	}
 
-	if v := meta["WaitTimeSeconds"]; v != "" {
+	if v := meta[subMetadataKeyWaitTimeSeconds]; v != "" {
 		i, err := strconv.ParseInt(v, 10, 64)
 		if err == nil {
 			waitTimeSeconds = &i
 		}
 	}
 
-	if v := meta["MaxNumberOfJobs"]; v != "" {
+	if v := meta[subMetadataKeyMaxNumberOfJobs]; v != "" {
 		i, err := strconv.ParseInt(v, 10, 64)
 		if err == nil {
 			maxNumberOfMessages = &i
@@ -104,46 +109,46 @@ func (s *Subscription) UnSubscribe() error {
 	return nil
 }
 
-func (s *Subscription) ReadLoop() {
+func (s *Subscription) Start() {
+	msgCh := make(chan *sqs.Message)
+	go s.writeMessageChan(msgCh)
+	s.readMessageChan(msgCh)
+}
 
-	ch := make(chan *sqs.Message)
-
-	go func() {
-		for {
-
-			if atomic.LoadInt32(&s.state) != subStateActive {
-				close(ch)
-				return
-			}
-
-			ctx := context.Background()
-			result, err := s.raw.ReceiveMessageWithContext(ctx, &sqs.ReceiveMessageInput{
-				AttributeNames: []*string{
-					aws.String(sqs.QueueAttributeNameAll),
-				},
-				MessageAttributeNames: []*string{
-					aws.String(sqs.QueueAttributeNameAll),
-				},
-				QueueUrl: aws.String(s.queueAttributes.URL),
-
-				VisibilityTimeout:   s.visibilityTimeout,
-				WaitTimeSeconds:     s.waitTimeSeconds,
-				MaxNumberOfMessages: s.maxNumberOfMessages,
-			})
-			if err != nil {
-				close(ch)
-				return
-			}
-			if len(result.Messages) == 0 {
-				time.Sleep(s.pollingInterval)
-				continue
-			}
-			for _, msg := range result.Messages {
-				ch <- msg
-			}
+func (s *Subscription) writeMessageChan(ch chan *sqs.Message) {
+	for {
+		if atomic.LoadInt32(&s.state) != subStateActive {
+			close(ch)
+			return
 		}
-	}()
+		ctx := context.Background()
+		result, err := s.raw.ReceiveMessageWithContext(ctx, &sqs.ReceiveMessageInput{
+			AttributeNames: []*string{
+				aws.String(sqs.QueueAttributeNameAll),
+			},
+			MessageAttributeNames: []*string{
+				aws.String(sqs.QueueAttributeNameAll),
+			},
+			QueueUrl:            aws.String(s.queueAttributes.URL),
+			VisibilityTimeout:   s.visibilityTimeout,
+			WaitTimeSeconds:     s.waitTimeSeconds,
+			MaxNumberOfMessages: s.maxNumberOfMessages,
+		})
+		if err != nil {
+			close(ch)
+			return
+		}
+		if len(result.Messages) == 0 {
+			time.Sleep(s.pollingInterval)
+			continue
+		}
+		for _, msg := range result.Messages {
+			ch <- msg
+		}
+	}
+}
 
+func (s *Subscription) readMessageChan(ch chan *sqs.Message) {
 	for {
 		msg, ok := <-ch
 		if !ok {

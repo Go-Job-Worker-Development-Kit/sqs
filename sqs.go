@@ -127,7 +127,7 @@ func (c *Connector) Subscribe(ctx context.Context, input *jobworker.SubscribeInp
 	}
 
 	sub := internal.NewSubscription(queue, c.svc, c, input.Metadata)
-	go sub.ReadLoop()
+	go sub.Start()
 	return &jobworker.SubscribeOutput{
 		Subscription: sub,
 	}, nil
