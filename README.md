@@ -84,7 +84,7 @@ func main() {
 
 ### Received Job
 
-| Key | Value | Description |Ref |
+| Key | Value | Description | Ref |
 |:---|:---|:---|:---|
 |MessageId |string |A unique identifier for the message. |- |
 |ReceiptHandle |string |An identifier associated with the act of receiving the message. |- |
@@ -112,7 +112,7 @@ func main() {
 
 | Key | Value | Description |
 |:---|:---|:---|
-|PollingInterval |int64 |If there is no job, wait until the polling interval time (seconds). |
+|PollingInterval |int64 |If there is no job, wait until the polling interval time (in seconds). |
 |VisibilityTimeout |int64 |The duration (in seconds) that the received messages are hidden from subsequent retrieve requests after being retrieved by a ReceiveMessage request. |
 |WaitTimeSeconds |int64 |The duration (in seconds) for which the call waits for a message to arrive in the queue before returning. |
 |MaxNumberOfJobs |int64 |The maximum number of jobs to return. |
