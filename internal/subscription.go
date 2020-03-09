@@ -30,17 +30,17 @@ const (
 )
 
 func NewSubscription(queueAttributes *QueueAttributes,
-	raw *sqs.SQS, conn jobworker.Connector, meta map[string]string) *Subscription {
+	svc SQSClient, conn jobworker.Connector, meta map[string]string) *Subscription {
 	pollingInterval, visibilityTimeout, waitTimeSeconds, maxNumberOfMessages := extractMetadata(meta)
 	return &Subscription{
 		queueAttributes:     queueAttributes,
-		raw:                 raw,
+		svc:                 svc,
 		conn:                conn,
 		pollingInterval:     pollingInterval,
 		visibilityTimeout:   visibilityTimeout,
 		waitTimeSeconds:     waitTimeSeconds,
 		maxNumberOfMessages: maxNumberOfMessages,
-		receiveMessage:      raw.ReceiveMessageWithContext,
+		receiveMessage:      svc.ReceiveMessageWithContext, // TODO should use svc
 		queue:               make(chan *jobworker.Job),
 		state:               subStateActive,
 	}
@@ -86,7 +86,7 @@ func extractMetadata(meta map[string]string) (
 
 type Subscription struct {
 	queueAttributes *QueueAttributes
-	raw             *sqs.SQS
+	svc             SQSClient
 	conn            jobworker.Connector
 
 	pollingInterval     time.Duration

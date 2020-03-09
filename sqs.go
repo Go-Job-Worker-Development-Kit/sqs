@@ -111,7 +111,7 @@ func connAttrsToValues(attrs map[string]interface{}) *values {
 
 type Connector struct {
 	name       string
-	svc        *sqs.SQS
+	svc        internal.SQSClient
 	name2queue sync.Map
 	loggerFunc jobworker.LoggerFunc
 }
@@ -121,7 +121,7 @@ func (c *Connector) Name() string {
 }
 
 func (c *Connector) Subscribe(ctx context.Context, input *jobworker.SubscribeInput) (*jobworker.SubscribeOutput, error) {
-	queue, err := c.resolveQueue(ctx, input.Queue)
+	queue, err := c.resolveQueueAttributes(ctx, input.Queue)
 	if err != nil {
 		return nil, err
 	}
@@ -135,9 +135,8 @@ func (c *Connector) Subscribe(ctx context.Context, input *jobworker.SubscribeInp
 }
 
 func (c *Connector) Enqueue(ctx context.Context, input *jobworker.EnqueueInput) (*jobworker.EnqueueOutput, error) {
-	queue, err := c.resolveQueue(ctx, input.Queue)
+	queue, err := c.resolveQueueAttributes(ctx, input.Queue)
 	if err != nil {
-		// TODO
 		return nil, err
 	}
 	sendMessageInput := newSendMessageInput(input.Content, input.Metadata, input.CustomAttribute, queue)
@@ -150,7 +149,7 @@ func (c *Connector) Enqueue(ctx context.Context, input *jobworker.EnqueueInput) 
 
 func (c *Connector) EnqueueBatch(ctx context.Context, input *jobworker.EnqueueBatchInput) (*jobworker.EnqueueBatchOutput, error) {
 
-	queue, err := c.resolveQueue(ctx, input.Queue)
+	queue, err := c.resolveQueueAttributes(ctx, input.Queue)
 	if err != nil {
 		// TODO
 		return nil, err
@@ -231,12 +230,14 @@ func newSendMessageBatchRequestEntry(id string, content string,
 	var entry sqs.SendMessageBatchRequestEntry
 	entry.Id = aws.String(id)
 	entry.MessageBody = aws.String(content)
-	entry.MessageAttributes = make(map[string]*sqs.MessageAttributeValue)
-	for k, v := range attr {
-		entry.MessageAttributes[k] = &sqs.MessageAttributeValue{
-			DataType:    aws.String(v.DataType),
-			StringValue: aws.String(v.StringValue),
-			BinaryValue: v.BinaryValue,
+	if len(attr) > 0 {
+		entry.MessageAttributes = make(map[string]*sqs.MessageAttributeValue)
+		for k, v := range attr {
+			entry.MessageAttributes[k] = &sqs.MessageAttributeValue{
+				DataType:    aws.String(v.DataType),
+				StringValue: aws.String(v.StringValue),
+				BinaryValue: v.BinaryValue,
+			}
 		}
 	}
 
@@ -273,9 +274,8 @@ func newSendMessageBatchRequestEntry(id string, content string,
 }
 
 func (c *Connector) CompleteJob(ctx context.Context, input *jobworker.CompleteJobInput) (*jobworker.CompleteJobOutput, error) {
-	queue, err := c.resolveQueue(ctx, input.Job.QueueName)
+	queue, err := c.resolveQueueAttributes(ctx, input.Job.QueueName)
 	if err != nil {
-		// TODO
 		return nil, err
 	}
 	_, err = c.svc.DeleteMessageWithContext(ctx, &sqs.DeleteMessageInput{
@@ -283,7 +283,6 @@ func (c *Connector) CompleteJob(ctx context.Context, input *jobworker.CompleteJo
 		ReceiptHandle: aws.String(input.Job.Metadata[internal.MetadataKeyReceiptHandle]),
 	})
 	if err != nil {
-		// TODO handle already delete error
 		return nil, err
 	}
 	return &jobworker.CompleteJobOutput{}, nil
@@ -306,7 +305,7 @@ func (c *Connector) SetLoggerFunc(f jobworker.LoggerFunc) {
 	c.loggerFunc = f
 }
 
-func (c *Connector) resolveQueue(ctx context.Context, name string) (*internal.QueueAttributes, error) {
+func (c *Connector) resolveQueueAttributes(ctx context.Context, name string) (*internal.QueueAttributes, error) {
 
 	v, ok := c.name2queue.Load(name)
 	if !ok || v == nil {
@@ -315,7 +314,6 @@ func (c *Connector) resolveQueue(ctx context.Context, name string) (*internal.Qu
 			QueueName: aws.String(name),
 		})
 		if err != nil {
-
 			return nil, err
 		}
 
@@ -326,7 +324,6 @@ func (c *Connector) resolveQueue(ctx context.Context, name string) (*internal.Qu
 			QueueUrl: urlOutput.QueueUrl,
 		})
 		if err != nil {
-
 			return nil, err
 		}
 
@@ -354,9 +351,8 @@ func (c *Connector) verbose() bool {
 }
 
 func (c *Connector) ChangeJobVisibility(ctx context.Context, input *ChangeJobVisibilityInput) (*ChangeJobVisibilityOutput, error) {
-	queue, err := c.resolveQueue(ctx, input.Job.QueueName)
+	queue, err := c.resolveQueueAttributes(ctx, input.Job.QueueName)
 	if err != nil {
-		// TODO
 		return nil, err
 	}
 	_, err = c.svc.ChangeMessageVisibilityWithContext(ctx, &sqs.ChangeMessageVisibilityInput{
@@ -387,7 +383,7 @@ func (c *Connector) CreateQueue(ctx context.Context, input *CreateQueueInput) (*
 }
 
 func (c *Connector) UpdateQueue(ctx context.Context, input *UpdateQueueInput) (*UpdateQueueOutput, error) {
-	queue, err := c.resolveQueue(ctx, input.Name)
+	queue, err := c.resolveQueueAttributes(ctx, input.Name)
 	if err != nil {
 		// TODO
 		return nil, err
@@ -412,13 +408,13 @@ func (c *Connector) UpdateQueue(ctx context.Context, input *UpdateQueueInput) (*
 
 // TODO
 //func (c *Connector) RedriveJob(ctx context.Context, input *RedriveJobInput, opts ...func(*jobworker.Option)) (*RedriveJobOutput, error) {
-//	fromQueue, err := c.resolveQueue(ctx, input.From)
+//	fromQueue, err := c.resolveQueueAttributes(ctx, input.From)
 //	if err != nil {
 //		// TODO
 //		return nil, err
 //	}
 //
-//	toQueue, err := c.resolveQueue(ctx, input.To)
+//	toQueue, err := c.resolveQueueAttributes(ctx, input.To)
 //	if err != nil {
 //		// TODO
 //		return nil, err
