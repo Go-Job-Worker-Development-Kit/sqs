@@ -26,12 +26,52 @@ func TestNewSubscription(t *testing.T) {
 		args args
 		want *Subscription
 	}{
-		// TODO: Add test cases.
+		{
+			name: "normal case",
+			args: args{
+				queueAttributes: &QueueAttributes{URL: "http://localhost/test"},
+				meta: map[string]string{
+					"PollingInterval":   "1",
+					"VisibilityTimeout": "2",
+					"WaitTimeSeconds":   "3",
+					"MaxNumberOfJobs":   "4",
+				},
+			},
+			want: &Subscription{
+				queueAttributes:     &QueueAttributes{URL: "http://localhost/test"},
+				pollingInterval:     time.Second,
+				visibilityTimeout:   aws.Int64(2),
+				waitTimeSeconds:     aws.Int64(3),
+				maxNumberOfMessages: aws.Int64(4),
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := NewSubscription(tt.args.queueAttributes, tt.args.raw, tt.args.conn, tt.args.meta); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("NewSubscription() = %v, want %v", got, tt.want)
+			got := NewSubscription(tt.args.queueAttributes, tt.args.raw, tt.args.conn, tt.args.meta)
+			if !reflect.DeepEqual(got.queueAttributes.URL, tt.want.queueAttributes.URL) {
+				t.Errorf("NewSubscription() = %v, want %v", got.queueAttributes.URL, tt.want.queueAttributes.URL)
+			}
+			if !reflect.DeepEqual(got.pollingInterval, tt.want.pollingInterval) {
+				t.Errorf("NewSubscription() = %v, want %v", got.pollingInterval, tt.want.pollingInterval)
+			}
+			if !reflect.DeepEqual(got.visibilityTimeout, tt.want.visibilityTimeout) {
+				t.Errorf("NewSubscription() = %v, want %v", got.visibilityTimeout, tt.want.visibilityTimeout)
+			}
+			if !reflect.DeepEqual(got.waitTimeSeconds, tt.want.waitTimeSeconds) {
+				t.Errorf("NewSubscription() = %v, want %v", got.waitTimeSeconds, tt.want.waitTimeSeconds)
+			}
+			if !reflect.DeepEqual(got.maxNumberOfMessages, tt.want.maxNumberOfMessages) {
+				t.Errorf("NewSubscription() = %v, want %v", got.maxNumberOfMessages, tt.want.maxNumberOfMessages)
+			}
+			if reflect.DeepEqual(got.receiveMessage, nil) {
+				t.Errorf("NewSubscription() = func, want %v", "a not nil")
+			}
+			if reflect.DeepEqual(got.queue, nil) {
+				t.Errorf("NewSubscription() = %v, want %v", got.queue, "a not nil")
+			}
+			if !reflect.DeepEqual(got.state, subStateActive) {
+				t.Errorf("NewSubscription() = %v, want %v", got.state, subStateActive)
 			}
 		})
 	}
@@ -44,61 +84,57 @@ func Test_extractMetadata(t *testing.T) {
 	tests := []struct {
 		name                    string
 		args                    args
-		wantPollingInterval     time.Duration
 		wantVisibilityTimeout   *int64
 		wantWaitTimeSeconds     *int64
 		wantMaxNumberOfMessages *int64
+		wantNil                 bool
 	}{
 		{
 			name: "normal case",
 			args: args{
 				meta: map[string]string{
-					"PollingInterval":   "1",
 					"VisibilityTimeout": "2",
 					"WaitTimeSeconds":   "3",
 					"MaxNumberOfJobs":   "4",
 				},
 			},
-			wantPollingInterval:     1 * time.Second,
 			wantVisibilityTimeout:   aws.Int64(2),
 			wantWaitTimeSeconds:     aws.Int64(3),
 			wantMaxNumberOfMessages: aws.Int64(4),
 		},
 		{
-			name: "should apply default value",
+			name: "should apply nil",
 			args: args{
-				meta: map[string]string{
-					"VisibilityTimeout": "2",
-					"WaitTimeSeconds":   "3",
-					"MaxNumberOfJobs":   "4",
-				},
+				meta: map[string]string{},
 			},
-			wantPollingInterval:     3 * time.Second,
-			wantVisibilityTimeout:   aws.Int64(2),
-			wantWaitTimeSeconds:     aws.Int64(3),
-			wantMaxNumberOfMessages: aws.Int64(4),
+			wantNil: true,
 		},
 		{
-			name: "should apply default value",
+			name: "should apply nil",
 			args: args{
 				meta: map[string]string{
-					"PollingInterval":   "InvalidValue",
-					"VisibilityTimeout": "2",
-					"WaitTimeSeconds":   "3",
-					"MaxNumberOfJobs":   "4",
+					"VisibilityTimeout": "InvalidValue",
+					"WaitTimeSeconds":   "InvalidValue",
+					"MaxNumberOfJobs":   "InvalidValue",
 				},
 			},
-			wantPollingInterval:     3 * time.Second,
-			wantVisibilityTimeout:   aws.Int64(2),
-			wantWaitTimeSeconds:     aws.Int64(3),
-			wantMaxNumberOfMessages: aws.Int64(4),
+			wantNil: true,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotPollingInterval, gotVisibilityTimeout, gotWaitTimeSeconds, gotMaxNumberOfMessages := extractMetadata(tt.args.meta)
-			if gotPollingInterval != tt.wantPollingInterval {
-				t.Errorf("extractMetadata() gotPollingInterval = %v, want %v", gotPollingInterval, tt.wantPollingInterval)
+			_, gotVisibilityTimeout, gotWaitTimeSeconds, gotMaxNumberOfMessages := extractMetadata(tt.args.meta)
+			if tt.wantNil {
+				if gotVisibilityTimeout != nil {
+					t.Errorf("extractMetadata() gotVisibilityTimeout = %v, want %v", gotVisibilityTimeout, tt.wantVisibilityTimeout)
+				}
+				if gotWaitTimeSeconds != nil {
+					t.Errorf("extractMetadata() gotWaitTimeSeconds = %v, want %v", gotWaitTimeSeconds, tt.wantWaitTimeSeconds)
+				}
+				if gotMaxNumberOfMessages != nil {
+					t.Errorf("extractMetadata() gotMaxNumberOfMessages = %v, want %v", gotMaxNumberOfMessages, tt.wantMaxNumberOfMessages)
+				}
+				return
 			}
 			if *gotVisibilityTimeout != *tt.wantVisibilityTimeout {
 				t.Errorf("extractMetadata() gotVisibilityTimeout = %v, want %v", gotVisibilityTimeout, tt.wantVisibilityTimeout)
@@ -108,6 +144,51 @@ func Test_extractMetadata(t *testing.T) {
 			}
 			if *gotMaxNumberOfMessages != *tt.wantMaxNumberOfMessages {
 				t.Errorf("extractMetadata() gotMaxNumberOfMessages = %v, want %v", gotMaxNumberOfMessages, tt.wantMaxNumberOfMessages)
+			}
+		})
+	}
+}
+
+func Test_extractMetadata_PollingInterval(t *testing.T) {
+	type args struct {
+		meta map[string]string
+	}
+	tests := []struct {
+		name                string
+		args                args
+		wantPollingInterval time.Duration
+	}{
+		{
+			name: "normal case",
+			args: args{
+				meta: map[string]string{
+					"PollingInterval": "1",
+				},
+			},
+			wantPollingInterval: 1 * time.Second,
+		},
+		{
+			name: "should apply default value",
+			args: args{
+				meta: map[string]string{},
+			},
+			wantPollingInterval: 3 * time.Second,
+		},
+		{
+			name: "should apply default value",
+			args: args{
+				meta: map[string]string{
+					"PollingInterval": "InvalidValue",
+				},
+			},
+			wantPollingInterval: 3 * time.Second,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotPollingInterval, _, _, _ := extractMetadata(tt.args.meta)
+			if gotPollingInterval != tt.wantPollingInterval {
+				t.Errorf("extractMetadata() gotPollingInterval = %v, want %v", gotPollingInterval, tt.wantPollingInterval)
 			}
 		})
 	}
@@ -295,6 +376,7 @@ func TestSubscription_writeMessageChan(t *testing.T) {
 				if _, ok := <-tt.args.ch; ok {
 					t.Errorf("Subscription.writeMessageChan() result = %v, wantClosedChan %v", ok, tt.wantClosedChan)
 				}
+				return
 			}
 			if len(tt.args.ch) != tt.wantMessageSize {
 				t.Errorf("Subscription.writeMessageChan() size = %v, wantSize %v", len(tt.args.ch), tt.wantMessageSize)
@@ -305,76 +387,100 @@ func TestSubscription_writeMessageChan(t *testing.T) {
 
 func TestSubscription_readMessageChan(t *testing.T) {
 	type fields struct {
-		queueAttributes     *QueueAttributes
-		raw                 *sqs.SQS
-		conn                jobworker.Connector
-		pollingInterval     time.Duration
-		visibilityTimeout   *int64
-		waitTimeSeconds     *int64
-		maxNumberOfMessages *int64
-		queue               chan *jobworker.Job
-		state               int32
+		queueAttributes *QueueAttributes
+		queue           chan *jobworker.Job
+		state           int32
 	}
 	type args struct {
 		ch chan *sqs.Message
 	}
 	tests := []struct {
-		name   string
-		fields fields
-		args   args
+		name            string
+		fields          fields
+		args            args
+		wantMessageSize int
+		wantClosedChan  bool
 	}{
-		// TODO: Add test cases.
+		{
+			name: "normal case",
+			fields: fields{
+				queueAttributes: &QueueAttributes{URL: "http://localhost/test"},
+				queue:           make(chan *jobworker.Job),
+				state:           subStateActive,
+			},
+			args: args{
+				ch: make(chan *sqs.Message, 10),
+			},
+			wantMessageSize: 1,
+			wantClosedChan:  false,
+		},
+		{
+			name: "closed message chan and state is active",
+			fields: fields{
+				queueAttributes: &QueueAttributes{URL: "http://localhost/test"},
+				queue:           make(chan *jobworker.Job),
+				state:           subStateActive,
+			},
+			args: args{
+				ch: make(chan *sqs.Message, 10),
+			},
+			wantMessageSize: 1,
+			wantClosedChan:  true,
+		},
+		{
+			name: "closed message chan and state is closing",
+			fields: fields{
+				queueAttributes: &QueueAttributes{URL: "http://localhost/test"},
+				queue:           make(chan *jobworker.Job),
+				state:           subStateClosing,
+			},
+			args: args{
+				ch: make(chan *sqs.Message, 10),
+			},
+			wantMessageSize: 1,
+			wantClosedChan:  true,
+		},
+		{
+			name: "closed message chan and state is closed",
+			fields: fields{
+				queueAttributes: &QueueAttributes{URL: "http://localhost/test"},
+				queue: func() chan *jobworker.Job {
+					ch := make(chan *jobworker.Job)
+					close(ch)
+					return ch
+				}(),
+				state: subStateClosed,
+			},
+			args: args{
+				ch: make(chan *sqs.Message, 10),
+			},
+			wantMessageSize: 1,
+			wantClosedChan:  true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := &Subscription{
-				queueAttributes:     tt.fields.queueAttributes,
-				raw:                 tt.fields.raw,
-				conn:                tt.fields.conn,
-				pollingInterval:     tt.fields.pollingInterval,
-				visibilityTimeout:   tt.fields.visibilityTimeout,
-				waitTimeSeconds:     tt.fields.waitTimeSeconds,
-				maxNumberOfMessages: tt.fields.maxNumberOfMessages,
-				queue:               tt.fields.queue,
-				state:               tt.fields.state,
+				queueAttributes: tt.fields.queueAttributes,
+				queue:           tt.fields.queue,
+				state:           tt.fields.state,
 			}
-			s.readMessageChan(tt.args.ch)
-		})
-	}
-}
 
-func TestSubscription_closeQueue(t *testing.T) {
-	type fields struct {
-		queueAttributes     *QueueAttributes
-		raw                 *sqs.SQS
-		conn                jobworker.Connector
-		pollingInterval     time.Duration
-		visibilityTimeout   *int64
-		waitTimeSeconds     *int64
-		maxNumberOfMessages *int64
-		queue               chan *jobworker.Job
-		state               int32
-	}
-	tests := []struct {
-		name   string
-		fields fields
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			s := &Subscription{
-				queueAttributes:     tt.fields.queueAttributes,
-				raw:                 tt.fields.raw,
-				conn:                tt.fields.conn,
-				pollingInterval:     tt.fields.pollingInterval,
-				visibilityTimeout:   tt.fields.visibilityTimeout,
-				waitTimeSeconds:     tt.fields.waitTimeSeconds,
-				maxNumberOfMessages: tt.fields.maxNumberOfMessages,
-				queue:               tt.fields.queue,
-				state:               tt.fields.state,
+			go s.readMessageChan(tt.args.ch)
+			if tt.wantClosedChan {
+				close(tt.args.ch)
+				if _, ok := <-s.queue; ok {
+					t.Errorf("Subscription.readMessageChan() result = %v, wantClosedChan %v", ok, tt.wantClosedChan)
+				}
+				return
 			}
-			s.closeQueue()
+
+			for i := 0; i < tt.wantMessageSize; i++ {
+				tt.args.ch <- &sqs.Message{}
+			}
+			if len(tt.args.ch) != tt.wantMessageSize {
+				t.Errorf("Subscription.readMessageChan() size = %v, wantSize %v", len(tt.args.ch), tt.wantMessageSize)
+			}
 		})
 	}
 }

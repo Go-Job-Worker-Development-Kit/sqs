@@ -17,9 +17,9 @@ import (
 )
 
 const (
-	subStateActive  = 0
-	subStateClosing = 1
-	subStateClosed  = 2
+	subStateActive  = int32(0)
+	subStateClosing = int32(1)
+	subStateClosed  = int32(2)
 
 	subMetadataKeyPollingInterval   = "PollingInterval"
 	subMetadataKeyVisibilityTimeout = "VisibilityTimeout"
