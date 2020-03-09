@@ -7,6 +7,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/aws/aws-sdk-go/aws/request"
+
 	"github.com/aws/aws-sdk-go/aws"
 
 	"github.com/aws/aws-sdk-go/service/sqs"
@@ -23,6 +25,8 @@ const (
 	subMetadataKeyVisibilityTimeout = "VisibilityTimeout"
 	subMetadataKeyWaitTimeSeconds   = "WaitTimeSeconds"
 	subMetadataKeyMaxNumberOfJobs   = "MaxNumberOfJobs"
+
+	defaultPollingInterval = 3 * time.Second
 )
 
 func NewSubscription(queueAttributes *QueueAttributes,
@@ -36,6 +40,7 @@ func NewSubscription(queueAttributes *QueueAttributes,
 		visibilityTimeout:   visibilityTimeout,
 		waitTimeSeconds:     waitTimeSeconds,
 		maxNumberOfMessages: maxNumberOfMessages,
+		receiveMessage:      raw.ReceiveMessageWithContext,
 		queue:               make(chan *jobworker.Job),
 		state:               subStateActive,
 	}
@@ -48,6 +53,7 @@ func extractMetadata(meta map[string]string) (
 	maxNumberOfMessages *int64,
 ) {
 
+	pollingInterval = defaultPollingInterval
 	if v := meta[subMetadataKeyPollingInterval]; v != "" {
 		i, err := strconv.ParseInt(v, 10, 64)
 		if err == nil {
@@ -88,8 +94,9 @@ type Subscription struct {
 	waitTimeSeconds     *int64
 	maxNumberOfMessages *int64
 
-	queue chan *jobworker.Job
-	state int32
+	receiveMessage func(ctx aws.Context, input *sqs.ReceiveMessageInput, opts ...request.Option) (*sqs.ReceiveMessageOutput, error)
+	queue          chan *jobworker.Job
+	state          int32
 }
 
 func (s *Subscription) Active() bool {
@@ -122,7 +129,7 @@ func (s *Subscription) writeMessageChan(ch chan *sqs.Message) {
 			return
 		}
 		ctx := context.Background()
-		result, err := s.raw.ReceiveMessageWithContext(ctx, &sqs.ReceiveMessageInput{
+		result, err := s.receiveMessage(ctx, &sqs.ReceiveMessageInput{
 			AttributeNames: []*string{
 				aws.String(sqs.QueueAttributeNameAll),
 			},
