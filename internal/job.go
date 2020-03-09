@@ -31,7 +31,6 @@ const (
 
 func newMetadata(msg *sqs.Message) map[string]string {
 	metadata := make(map[string]string)
-	metadata = make(map[string]string)
 	for k, v := range msg.Attributes {
 		if v != nil {
 			metadata[k] = aws.StringValue(v)
@@ -49,7 +48,7 @@ func newCustomAttribute(msg *sqs.Message) map[string]*jobworker.CustomAttribute 
 	for k, v := range msg.MessageAttributes {
 		if v != nil {
 			customAttribute[k] = &jobworker.CustomAttribute{
-				DataType:    aws.StringValue(v.DataType),
+				DataType:    aws.StringValue(v.DataType), // String, Number, and Binary
 				BinaryValue: v.BinaryValue,
 				StringValue: aws.StringValue(v.StringValue),
 			}
