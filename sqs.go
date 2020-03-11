@@ -148,23 +148,18 @@ func (c *Connector) Enqueue(ctx context.Context, input *jobworker.EnqueueInput) 
 }
 
 func (c *Connector) EnqueueBatch(ctx context.Context, input *jobworker.EnqueueBatchInput) (*jobworker.EnqueueBatchOutput, error) {
-
 	queue, err := c.resolveQueueAttributes(ctx, input.Queue)
 	if err != nil {
-		// TODO
 		return nil, err
 	}
-
 	var entries []*sqs.SendMessageBatchRequestEntry
 	for k, v := range input.Id2Content {
 		entries = append(entries, newSendMessageBatchRequestEntry(k, v, input.Metadata, input.CustomAttribute, queue))
 	}
-
 	sqsOutput, err := c.svc.SendMessageBatchWithContext(ctx, &sqs.SendMessageBatchInput{
 		Entries:  entries,
 		QueueUrl: &queue.URL,
 	})
-
 	var output jobworker.EnqueueBatchOutput
 	if sqsOutput != nil {
 		for _, v := range sqsOutput.Successful {

@@ -546,3 +546,105 @@ func TestConnector_Subscribe(t *testing.T) {
 		})
 	}
 }
+
+func TestConnector_Enqueue(t *testing.T) {
+
+	svc := &internal.SQSClientMock{
+		SendMessageWithContextFunc: func(ctx aws.Context, input *sqs.SendMessageInput, opts ...request.Option) (output *sqs.SendMessageOutput, e error) {
+			if aws.StringValue(input.MessageBody) == "" {
+				return nil, errors.New("MessageBody is empty")
+			}
+			return &sqs.SendMessageOutput{}, nil
+		},
+		GetQueueUrlWithContextFunc: func(ctx aws.Context, input *sqs.GetQueueUrlInput, opts ...request.Option) (output *sqs.GetQueueUrlOutput, e error) {
+			if aws.StringValue(input.QueueName) == "" {
+				return nil, errors.New("QueueName is empty")
+			}
+			return &sqs.GetQueueUrlOutput{
+				QueueUrl: aws.String("http://localhost/foo"),
+			}, nil
+		},
+		GetQueueAttributesWithContextFunc: func(ctx aws.Context, input *sqs.GetQueueAttributesInput, opts ...request.Option) (output *sqs.GetQueueAttributesOutput, e error) {
+			if aws.StringValue(input.QueueUrl) == "" {
+				return nil, errors.New("QueueUrl is empty")
+			}
+			return &sqs.GetQueueAttributesOutput{
+				Attributes: map[string]*string{},
+			}, nil
+		},
+	}
+
+	type fields struct {
+		svc internal.SQSClient
+	}
+	type args struct {
+		ctx   context.Context
+		input *jobworker.EnqueueInput
+	}
+	tests := []struct {
+		name    string
+		fields  fields
+		args    args
+		want    *jobworker.EnqueueOutput
+		wantErr bool
+	}{
+		{
+			name: "normal case",
+			fields: fields{
+				svc: svc,
+			},
+			args: args{
+				ctx: context.Background(),
+				input: &jobworker.EnqueueInput{
+					Queue:   "foo",
+					Content: "hello",
+				},
+			},
+			want:    &jobworker.EnqueueOutput{},
+			wantErr: false,
+		},
+		{
+			name: "error case",
+			fields: fields{
+				svc: svc,
+			},
+			args: args{
+				ctx: context.Background(),
+				input: &jobworker.EnqueueInput{
+					Content: "hello",
+				},
+			},
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			name: "error case",
+			fields: fields{
+				svc: svc,
+			},
+			args: args{
+				ctx: context.Background(),
+				input: &jobworker.EnqueueInput{
+					Queue: "foo",
+				},
+			},
+			want:    nil,
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := &Connector{
+				svc: tt.fields.svc,
+			}
+			got, err := c.Enqueue(tt.args.ctx, tt.args.input)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Connector.Enqueue() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("Connector.Enqueue() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
