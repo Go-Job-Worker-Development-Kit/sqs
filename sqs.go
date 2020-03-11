@@ -355,11 +355,15 @@ func (c *Connector) ChangeJobVisibility(ctx context.Context, input *ChangeJobVis
 	if err != nil {
 		return nil, err
 	}
+	msg := input.Job.Raw.(*sqs.Message)
 	_, err = c.svc.ChangeMessageVisibilityWithContext(ctx, &sqs.ChangeMessageVisibilityInput{
-		ReceiptHandle:     aws.String(input.Job.Metadata[internal.MetadataKeyReceiptHandle]),
+		ReceiptHandle:     msg.ReceiptHandle,
 		QueueUrl:          aws.String(queue.URL),
 		VisibilityTimeout: aws.Int64(input.VisibilityTimeout),
 	})
+	if err != nil {
+		return nil, err
+	}
 	return &ChangeJobVisibilityOutput{}, nil
 }
 
@@ -376,7 +380,6 @@ func (c *Connector) CreateQueue(ctx context.Context, input *CreateQueueInput) (*
 		Attributes: attributes,
 	})
 	if err != nil {
-		// TODO
 		return nil, err
 	}
 	return &CreateQueueOutput{}, nil
