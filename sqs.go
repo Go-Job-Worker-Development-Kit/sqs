@@ -280,7 +280,7 @@ func (c *Connector) CompleteJob(ctx context.Context, input *jobworker.CompleteJo
 	}
 	_, err = c.svc.DeleteMessageWithContext(ctx, &sqs.DeleteMessageInput{
 		QueueUrl:      &queue.URL,
-		ReceiptHandle: aws.String(input.Job.Metadata[internal.MetadataKeyReceiptHandle]),
+		ReceiptHandle: extractReceiptHandle(input.Job),
 	})
 	if err != nil {
 		return nil, err
@@ -293,7 +293,10 @@ func (c *Connector) FailJob(ctx context.Context, input *jobworker.FailJobInput) 
 		Job:               input.Job,
 		VisibilityTimeout: 0,
 	})
-	return &jobworker.FailJobOutput{}, err
+	if err != nil {
+		return nil, err
+	}
+	return &jobworker.FailJobOutput{}, nil
 }
 
 func (c *Connector) Close() error {
@@ -355,9 +358,8 @@ func (c *Connector) ChangeJobVisibility(ctx context.Context, input *ChangeJobVis
 	if err != nil {
 		return nil, err
 	}
-	msg := input.Job.Raw.(*sqs.Message)
 	_, err = c.svc.ChangeMessageVisibilityWithContext(ctx, &sqs.ChangeMessageVisibilityInput{
-		ReceiptHandle:     msg.ReceiptHandle,
+		ReceiptHandle:     extractReceiptHandle(input.Job),
 		QueueUrl:          aws.String(queue.URL),
 		VisibilityTimeout: aws.Int64(input.VisibilityTimeout),
 	})
@@ -365,6 +367,14 @@ func (c *Connector) ChangeJobVisibility(ctx context.Context, input *ChangeJobVis
 		return nil, err
 	}
 	return &ChangeJobVisibilityOutput{}, nil
+}
+
+func extractReceiptHandle(job *jobworker.Job) *string {
+	msg, ok := job.Raw.(*sqs.Message)
+	if !ok {
+		return nil
+	}
+	return msg.ReceiptHandle
 }
 
 func (c *Connector) CreateQueue(ctx context.Context, input *CreateQueueInput) (*CreateQueueOutput, error) {
