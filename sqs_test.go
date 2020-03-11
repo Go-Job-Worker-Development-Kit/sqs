@@ -465,3 +465,84 @@ func TestConnector_CompleteJob(t *testing.T) {
 		})
 	}
 }
+
+func TestConnector_Subscribe(t *testing.T) {
+
+	svc := &internal.SQSClientMock{
+		ReceiveMessageWithContextFunc: func(ctx aws.Context, input *sqs.ReceiveMessageInput, opts ...request.Option) (output *sqs.ReceiveMessageOutput, e error) {
+			return &sqs.ReceiveMessageOutput{
+				Messages: []*sqs.Message{
+					{}, {}, {},
+				},
+			}, nil
+		},
+		GetQueueUrlWithContextFunc: func(ctx aws.Context, input *sqs.GetQueueUrlInput, opts ...request.Option) (output *sqs.GetQueueUrlOutput, e error) {
+			if aws.StringValue(input.QueueName) == "" {
+				return nil, errors.New("QueueName is empty")
+			}
+			return &sqs.GetQueueUrlOutput{
+				QueueUrl: aws.String("http://localhost/foo"),
+			}, nil
+		},
+		GetQueueAttributesWithContextFunc: func(ctx aws.Context, input *sqs.GetQueueAttributesInput, opts ...request.Option) (output *sqs.GetQueueAttributesOutput, e error) {
+			if aws.StringValue(input.QueueUrl) == "" {
+				return nil, errors.New("QueueUrl is empty")
+			}
+			return &sqs.GetQueueAttributesOutput{
+				Attributes: map[string]*string{},
+			}, nil
+		},
+	}
+
+	type fields struct {
+		svc internal.SQSClient
+	}
+	type args struct {
+		ctx   context.Context
+		input *jobworker.SubscribeInput
+	}
+	tests := []struct {
+		name    string
+		fields  fields
+		args    args
+		want    *jobworker.SubscribeOutput
+		wantErr bool
+	}{
+		{
+			name: "normal case",
+			fields: fields{
+				svc: svc,
+			},
+			args: args{
+				ctx: nil,
+				input: &jobworker.SubscribeInput{
+					Queue: "foo",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "error case",
+			fields: fields{
+				svc: svc,
+			},
+			args: args{
+				ctx:   nil,
+				input: &jobworker.SubscribeInput{},
+			},
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := &Connector{
+				svc: tt.fields.svc,
+			}
+			_, err := c.Subscribe(tt.args.ctx, tt.args.input)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Connector.Subscribe() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+		})
+	}
+}

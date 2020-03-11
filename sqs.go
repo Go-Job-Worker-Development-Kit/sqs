@@ -177,100 +177,85 @@ func (c *Connector) EnqueueBatch(ctx context.Context, input *jobworker.EnqueueBa
 	return &output, err
 }
 
-func newSendMessageInput(content string, metadata map[string]string, attr map[string]*jobworker.CustomAttribute, queue *internal.QueueAttributes) *sqs.SendMessageInput {
+func newSendMessageInput(content string,
+	metadata map[string]string, attr map[string]*jobworker.CustomAttribute, queue *internal.QueueAttributes) *sqs.SendMessageInput {
 	var input sqs.SendMessageInput
 	input.MessageBody = aws.String(content)
 	input.QueueUrl = aws.String(queue.URL)
-
-	if len(attr) > 0 {
-		input.MessageAttributes = make(map[string]*sqs.MessageAttributeValue)
-		for k, v := range attr {
-			input.MessageAttributes[k] = &sqs.MessageAttributeValue{
-				DataType:    aws.String(v.DataType),
-				StringValue: aws.String(v.StringValue),
-				BinaryValue: v.BinaryValue,
-			}
-		}
-	}
-
-	if v, ok := queue.RawAttributes[internal.QueueAttributeKeyFifoQueue]; ok && aws.StringValue(v) == "true" {
-
+	input.MessageAttributes = toSQSMessageAttributeValues(attr)
+	if queue.IsFIFO() {
 		// fifo only
-		messageGroupId := metadata[internal.MetadataKeyMessageGroupID]
-		if messageGroupId == "" {
-			messageGroupId = "default"
+		input.MessageGroupId = extractGroupID(metadata)
+		input.MessageDeduplicationId = extractDeduplicationID(metadata)
+		if queue.IsContentBasedDeduplication() && input.MessageDeduplicationId == nil {
+			id := uuid.NewV4().String()
+			input.MessageDeduplicationId = aws.String(id)
 		}
-		input.MessageGroupId = aws.String(messageGroupId)
-
-		if v := metadata[internal.MetadataKeyMessageDeduplicationID]; v != "" {
-			input.MessageDeduplicationId = aws.String(v)
-		}
-
-		if v, ok := queue.RawAttributes[internal.QueueAttributeKeyContentBasedDeduplication]; ok && aws.StringValue(v) != "true" {
-			if input.MessageDeduplicationId == nil {
-				id := uuid.NewV4().String()
-				input.MessageDeduplicationId = aws.String(id)
-			}
-		}
-
 	} else {
 		// standard only
-		v, ok := metadata[internal.MetadataKeyMessageDelaySeconds]
-		if ok {
-			delaySeconds, _ := strconv.ParseInt(v, 10, 64)
-			input.DelaySeconds = aws.Int64(delaySeconds)
-		}
+		input.DelaySeconds = extractDelaySeconds(metadata)
 	}
-
 	return &input
 }
 
 func newSendMessageBatchRequestEntry(id string, content string,
 	metadata map[string]string, attr map[string]*jobworker.CustomAttribute, queue *internal.QueueAttributes) *sqs.SendMessageBatchRequestEntry {
 	var entry sqs.SendMessageBatchRequestEntry
-	entry.Id = aws.String(id)
 	entry.MessageBody = aws.String(content)
-	if len(attr) > 0 {
-		entry.MessageAttributes = make(map[string]*sqs.MessageAttributeValue)
-		for k, v := range attr {
-			entry.MessageAttributes[k] = &sqs.MessageAttributeValue{
-				DataType:    aws.String(v.DataType),
-				StringValue: aws.String(v.StringValue),
-				BinaryValue: v.BinaryValue,
-			}
-		}
-	}
-
-	if v, ok := queue.RawAttributes[internal.QueueAttributeKeyFifoQueue]; ok && aws.StringValue(v) == "true" {
-
+	entry.Id = aws.String(id)
+	entry.MessageAttributes = toSQSMessageAttributeValues(attr)
+	if queue.IsFIFO() {
 		// fifo only
-		messageGroupId := metadata[internal.MetadataKeyMessageGroupID]
-		if messageGroupId == "" {
-			messageGroupId = "default"
+		entry.MessageGroupId = extractGroupID(metadata)
+		entry.MessageDeduplicationId = extractDeduplicationID(metadata)
+		if queue.IsContentBasedDeduplication() && entry.MessageDeduplicationId == nil {
+			id := uuid.NewV4().String()
+			entry.MessageDeduplicationId = aws.String(id)
 		}
-		entry.MessageGroupId = aws.String(messageGroupId)
-
-		if v := metadata[internal.MetadataKeyMessageDeduplicationID]; v != "" {
-			entry.MessageDeduplicationId = aws.String(v)
-		}
-
-		if v, ok := queue.RawAttributes[internal.QueueAttributeKeyContentBasedDeduplication]; ok && aws.StringValue(v) != "true" {
-			if entry.MessageDeduplicationId == nil {
-				id := uuid.NewV4().String()
-				entry.MessageDeduplicationId = aws.String(id)
-			}
-		}
-
 	} else {
 		// standard only
-		v, ok := metadata[internal.MetadataKeyMessageDelaySeconds]
-		if ok {
-			delaySeconds, _ := strconv.ParseInt(v, 10, 64)
-			entry.DelaySeconds = aws.Int64(delaySeconds)
+		entry.DelaySeconds = extractDelaySeconds(metadata)
+	}
+	return &entry
+}
+
+func toSQSMessageAttributeValues(attr map[string]*jobworker.CustomAttribute) map[string]*sqs.MessageAttributeValue {
+	if len(attr) == 0 {
+		return nil
+	}
+	messageAttributes := make(map[string]*sqs.MessageAttributeValue)
+	for k, v := range attr {
+		messageAttributes[k] = &sqs.MessageAttributeValue{
+			DataType:    aws.String(v.DataType),
+			StringValue: aws.String(v.StringValue),
+			BinaryValue: v.BinaryValue,
 		}
 	}
+	return messageAttributes
+}
 
-	return &entry
+func extractGroupID(meta map[string]string) *string {
+	messageGroupId := meta[internal.MetadataKeyMessageGroupID]
+	if messageGroupId == "" {
+		messageGroupId = "default"
+	}
+	return aws.String(messageGroupId)
+}
+
+func extractDeduplicationID(meta map[string]string) *string {
+	if v := meta[internal.MetadataKeyMessageDeduplicationID]; v != "" {
+		return aws.String(v)
+	}
+	return nil
+}
+
+func extractDelaySeconds(meta map[string]string) *int64 {
+	v, ok := meta[internal.MetadataKeyMessageDelaySeconds]
+	if ok {
+		delaySeconds, _ := strconv.ParseInt(v, 10, 64)
+		return aws.Int64(delaySeconds)
+	}
+	return nil
 }
 
 func (c *Connector) CompleteJob(ctx context.Context, input *jobworker.CompleteJobInput) (*jobworker.CompleteJobOutput, error) {

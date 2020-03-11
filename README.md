@@ -104,9 +104,9 @@ func main() {
 
 | Key | Value | Description |
 |:---|:---|:---|
-|MessageDeduplicationId |string |The token used for deduplication of sent messages. |
-|MessageGroupId |string |The tag that specifies that a message belongs to a specific message group. |
-|MessageDelaySeconds |int64 |The length of time, in seconds, for which the delivery of all messages in the queue is delayed. |
+|MessageDeduplicationId |string |（fifo only）The token used for deduplication of sent messages. |
+|MessageGroupId |string |（fifo only）The tag that specifies that a message belongs to a specific message group. |
+|MessageDelaySeconds |int64 |（standard only）The length of time, in seconds, for which the delivery of all messages in the queue is delayed. |
 
 ### Subscribe Queue
 
