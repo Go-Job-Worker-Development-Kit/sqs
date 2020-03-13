@@ -1,4 +1,4 @@
-# aws-sqs-connector
+# aws-sqs-connector ![](https://github.com/go-jwdk/aws-sqs-connector/workflows/Go/badge.svg)
 
 A jobworker connector with Amazon SQS for [go-jwdk/jobworker](https://github.com/go-jwdk/jobworker) package.
 
