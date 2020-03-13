@@ -15,7 +15,7 @@ func (q *QueueAttributes) IsFIFO() bool {
 
 func (q *QueueAttributes) IsContentBasedDeduplication() bool {
 	v, ok := q.RawAttributes[QueueAttributeKeyContentBasedDeduplication]
-	return ok && aws.StringValue(v) != "true"
+	return ok && aws.StringValue(v) == "true"
 }
 
 const (

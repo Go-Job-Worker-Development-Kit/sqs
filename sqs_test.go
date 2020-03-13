@@ -727,7 +727,7 @@ func Test_extractGroupID(t *testing.T) {
 			args: args{
 				meta: map[string]string{},
 			},
-			want: aws.String(defaultmessageGroupID),
+			want: aws.String(defaultMessageGroupID),
 		},
 	}
 	for _, tt := range tests {
@@ -804,13 +804,360 @@ func Test_toSQSMessageAttributeValues(t *testing.T) {
 					},
 				},
 			},
-			want: map[string]*sqs.MessageAttributeValue{},
+			want: map[string]*sqs.MessageAttributeValue{
+				"Foo": {
+					BinaryValue: nil,
+					DataType:    aws.String("string"),
+					StringValue: aws.String(""),
+				},
+			},
+		},
+		{
+			name: "is nil",
+			args: args{
+				attr: map[string]*jobworker.CustomAttribute{},
+			},
+			want: nil,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := toSQSMessageAttributeValues(tt.args.attr); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("toSQSMessageAttributeValues() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_newSendMessageBatchRequestEntry(t *testing.T) {
+	type args struct {
+		id       string
+		content  string
+		metadata map[string]string
+		attr     map[string]*jobworker.CustomAttribute
+		queue    *internal.QueueAttributes
+	}
+	tests := []struct {
+		name string
+		args args
+		want *sqs.SendMessageBatchRequestEntry
+	}{
+		{
+			name: "normal case standard",
+			args: args{
+				id:      "uniq-id",
+				content: "hello",
+				metadata: map[string]string{
+					internal.MetadataKeyMessageDelaySeconds:    "3",
+					internal.MetadataKeyMessageDeduplicationID: "aaa",
+					internal.MetadataKeyMessageGroupID:         "bbb",
+				},
+				queue: &internal.QueueAttributes{
+					Name: "foo",
+				},
+			},
+			want: &sqs.SendMessageBatchRequestEntry{
+				DelaySeconds:      aws.Int64(3),
+				Id:                aws.String("uniq-id"),
+				MessageAttributes: nil,
+				MessageBody:       aws.String("hello"),
+			},
+		},
+		{
+			name: "normal case fifo",
+			args: args{
+				id:      "uniq-id",
+				content: "hello",
+				metadata: map[string]string{
+					internal.MetadataKeyMessageDelaySeconds:    "3",
+					internal.MetadataKeyMessageDeduplicationID: "aaa",
+					internal.MetadataKeyMessageGroupID:         "bbb",
+				},
+				queue: &internal.QueueAttributes{
+					Name: "foo",
+					RawAttributes: map[string]*string{
+						internal.QueueAttributeKeyFifoQueue: aws.String("true"),
+					},
+				},
+			},
+			want: &sqs.SendMessageBatchRequestEntry{
+				Id:                     aws.String("uniq-id"),
+				MessageAttributes:      nil,
+				MessageBody:            aws.String("hello"),
+				MessageDeduplicationId: aws.String("aaa"),
+				MessageGroupId:         aws.String("bbb"),
+			},
+		},
+		{
+			name: "normal case fifo and content based deduplication",
+			args: args{
+				id:      "uniq-id",
+				content: "hello",
+				metadata: map[string]string{
+					internal.MetadataKeyMessageDelaySeconds: "3",
+					internal.MetadataKeyMessageGroupID:      "bbb",
+				},
+				queue: &internal.QueueAttributes{
+					Name: "foo",
+					RawAttributes: map[string]*string{
+						internal.QueueAttributeKeyFifoQueue:                 aws.String("true"),
+						internal.QueueAttributeKeyContentBasedDeduplication: aws.String("true"),
+					},
+				},
+			},
+			want: &sqs.SendMessageBatchRequestEntry{
+				Id:                     aws.String("uniq-id"),
+				MessageAttributes:      nil,
+				MessageBody:            aws.String("hello"),
+				MessageDeduplicationId: aws.String("aaa"),
+				MessageGroupId:         aws.String("bbb"),
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := newSendMessageBatchRequestEntry(tt.args.id, tt.args.content, tt.args.metadata, tt.args.attr, tt.args.queue); !reflect.DeepEqual(got, tt.want) {
+				if tt.args.queue.IsContentBasedDeduplication() {
+					if !reflect.DeepEqual(got.MessageDeduplicationId, tt.want.MessageDeduplicationId) {
+						return
+					}
+				}
+				t.Errorf("newSendMessageBatchRequestEntry() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_newSendMessageInput(t *testing.T) {
+	type args struct {
+		content  string
+		metadata map[string]string
+		attr     map[string]*jobworker.CustomAttribute
+		queue    *internal.QueueAttributes
+	}
+	tests := []struct {
+		name string
+		args args
+		want *sqs.SendMessageInput
+	}{
+		{
+			name: "normal case standard",
+			args: args{
+				content: "hello",
+				metadata: map[string]string{
+					internal.MetadataKeyMessageDelaySeconds:    "3",
+					internal.MetadataKeyMessageDeduplicationID: "aaa",
+					internal.MetadataKeyMessageGroupID:         "bbb",
+				},
+				queue: &internal.QueueAttributes{
+					Name: "foo",
+					URL:  "http://localhost/test",
+				},
+			},
+			want: &sqs.SendMessageInput{
+				QueueUrl:          aws.String("http://localhost/test"),
+				DelaySeconds:      aws.Int64(3),
+				MessageAttributes: nil,
+				MessageBody:       aws.String("hello"),
+			},
+		},
+		{
+			name: "normal case fifo",
+			args: args{
+				content: "hello",
+				metadata: map[string]string{
+					internal.MetadataKeyMessageDelaySeconds:    "3",
+					internal.MetadataKeyMessageDeduplicationID: "aaa",
+					internal.MetadataKeyMessageGroupID:         "bbb",
+				},
+				queue: &internal.QueueAttributes{
+					Name: "foo",
+					URL:  "http://localhost/test",
+					RawAttributes: map[string]*string{
+						internal.QueueAttributeKeyFifoQueue: aws.String("true"),
+					},
+				},
+			},
+			want: &sqs.SendMessageInput{
+				QueueUrl:               aws.String("http://localhost/test"),
+				MessageAttributes:      nil,
+				MessageBody:            aws.String("hello"),
+				MessageDeduplicationId: aws.String("aaa"),
+				MessageGroupId:         aws.String("bbb"),
+			},
+		},
+		{
+			name: "normal case fifo and content based deduplication",
+			args: args{
+				content: "hello",
+				metadata: map[string]string{
+					internal.MetadataKeyMessageDelaySeconds: "3",
+					internal.MetadataKeyMessageGroupID:      "bbb",
+				},
+				queue: &internal.QueueAttributes{
+					Name: "foo",
+					URL:  "http://localhost/test",
+					RawAttributes: map[string]*string{
+						internal.QueueAttributeKeyFifoQueue:                 aws.String("true"),
+						internal.QueueAttributeKeyContentBasedDeduplication: aws.String("true"),
+					},
+				},
+			},
+			want: &sqs.SendMessageInput{
+				QueueUrl:               aws.String("http://localhost/test"),
+				MessageAttributes:      nil,
+				MessageBody:            aws.String("hello"),
+				MessageDeduplicationId: aws.String("aaa"),
+				MessageGroupId:         aws.String("bbb"),
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := newSendMessageInput(tt.args.content, tt.args.metadata, tt.args.attr, tt.args.queue); !reflect.DeepEqual(got, tt.want) {
+				if tt.args.queue.IsContentBasedDeduplication() {
+					if !reflect.DeepEqual(got.MessageDeduplicationId, tt.want.MessageDeduplicationId) {
+						return
+					}
+				}
+				t.Errorf("newSendMessageInput() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestConnector_EnqueueBatch(t *testing.T) {
+
+	svc := &internal.SQSClientMock{
+		SendMessageBatchWithContextFunc: func(ctx aws.Context, input *sqs.SendMessageBatchInput, opts ...request.Option) (output *sqs.SendMessageBatchOutput, e error) {
+			if len(input.Entries) == 0 {
+				return nil, errors.New("entries is empty")
+			}
+			return &sqs.SendMessageBatchOutput{
+				Failed: nil,
+				Successful: []*sqs.SendMessageBatchResultEntry{
+					{
+						Id: aws.String("a-1"),
+					},
+					{
+						Id: aws.String("a-2"),
+					},
+					{
+						Id: aws.String("a-3"),
+					},
+				},
+			}, nil
+		},
+		GetQueueUrlWithContextFunc: func(ctx aws.Context, input *sqs.GetQueueUrlInput, opts ...request.Option) (output *sqs.GetQueueUrlOutput, e error) {
+			if aws.StringValue(input.QueueName) == "" {
+				return nil, errors.New("QueueName is empty")
+			}
+			return &sqs.GetQueueUrlOutput{
+				QueueUrl: aws.String("http://localhost/foo"),
+			}, nil
+		},
+		GetQueueAttributesWithContextFunc: func(ctx aws.Context, input *sqs.GetQueueAttributesInput, opts ...request.Option) (output *sqs.GetQueueAttributesOutput, e error) {
+			if aws.StringValue(input.QueueUrl) == "" {
+				return nil, errors.New("QueueUrl is empty")
+			}
+			return &sqs.GetQueueAttributesOutput{
+				Attributes: map[string]*string{},
+			}, nil
+		},
+	}
+
+	type fields struct {
+		svc internal.SQSClient
+	}
+	type args struct {
+		ctx   context.Context
+		input *jobworker.EnqueueBatchInput
+	}
+	tests := []struct {
+		name    string
+		fields  fields
+		args    args
+		want    *jobworker.EnqueueBatchOutput
+		wantErr bool
+	}{
+		{
+			name: "normal case",
+			fields: fields{
+				svc: svc,
+			},
+			args: args{
+				ctx: context.Background(),
+				input: &jobworker.EnqueueBatchInput{
+					Queue: "foo",
+					Entries: []*jobworker.EnqueueBatchEntry{
+						{
+							ID:      "a-1",
+							Content: "foo",
+						},
+						{
+							ID:      "a-2",
+							Content: "bar",
+						},
+						{
+							ID:      "a-2",
+							Content: "baz",
+						},
+					},
+				},
+			},
+			want: &jobworker.EnqueueBatchOutput{
+				Failed:     nil,
+				Successful: []string{"a-1", "a-2", "a-3"},
+			},
+			wantErr: false,
+		},
+		{
+			name: "error case",
+			fields: fields{
+				svc: svc,
+			},
+			args: args{
+				ctx: context.Background(),
+				input: &jobworker.EnqueueBatchInput{
+					Entries: []*jobworker.EnqueueBatchEntry{
+						{
+							ID:      "a-1",
+							Content: "foo",
+						},
+					},
+				},
+			},
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			name: "error case",
+			fields: fields{
+				svc: svc,
+			},
+			args: args{
+				ctx: context.Background(),
+				input: &jobworker.EnqueueBatchInput{
+					Queue:   "foo",
+					Entries: []*jobworker.EnqueueBatchEntry{},
+				},
+			},
+			want:    nil,
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := &Connector{
+				svc: tt.fields.svc,
+			}
+			got, err := c.EnqueueBatch(tt.args.ctx, tt.args.input)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Connector.EnqueueBatch() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("Connector.EnqueueBatch() = %v, want %v", got, tt.want)
 			}
 		})
 	}

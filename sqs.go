@@ -26,7 +26,7 @@ const (
 	connAttributeNameNumMaxRetries      = "NumMaxRetries"
 
 	defaultNumMaxRetries  = 3
-	defaultmessageGroupID = "default"
+	defaultMessageGroupID = "default"
 )
 
 func init() {
@@ -189,7 +189,7 @@ func newSendMessageInput(content string,
 		// fifo only
 		input.MessageGroupId = extractGroupID(metadata)
 		input.MessageDeduplicationId = extractDeduplicationID(metadata)
-		if queue.IsContentBasedDeduplication() && input.MessageDeduplicationId == nil {
+		if input.MessageDeduplicationId == nil && queue.IsContentBasedDeduplication() {
 			id := uuid.NewV4().String()
 			input.MessageDeduplicationId = aws.String(id)
 		}
@@ -210,7 +210,7 @@ func newSendMessageBatchRequestEntry(id string, content string,
 		// fifo only
 		entry.MessageGroupId = extractGroupID(metadata)
 		entry.MessageDeduplicationId = extractDeduplicationID(metadata)
-		if queue.IsContentBasedDeduplication() && entry.MessageDeduplicationId == nil {
+		if entry.MessageDeduplicationId == nil && queue.IsContentBasedDeduplication() {
 			id := uuid.NewV4().String()
 			entry.MessageDeduplicationId = aws.String(id)
 		}
@@ -239,7 +239,7 @@ func toSQSMessageAttributeValues(attr map[string]*jobworker.CustomAttribute) map
 func extractGroupID(meta map[string]string) *string {
 	messageGroupId := meta[internal.MetadataKeyMessageGroupID]
 	if messageGroupId == "" {
-		messageGroupId = defaultmessageGroupID
+		messageGroupId = defaultMessageGroupID
 	}
 	return aws.String(messageGroupId)
 }
