@@ -648,3 +648,170 @@ func TestConnector_Enqueue(t *testing.T) {
 		})
 	}
 }
+
+func Test_extractDelaySeconds(t *testing.T) {
+	type args struct {
+		meta map[string]string
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    *int64
+		wantNil bool
+	}{
+		{
+			name: "normal case",
+			args: args{
+				meta: map[string]string{
+					internal.MetadataKeyMessageDelaySeconds: "3",
+				},
+			},
+			want:    aws.Int64(3),
+			wantNil: false,
+		},
+		{
+			name: "is nil",
+			args: args{
+				meta: map[string]string{},
+			},
+			want:    nil,
+			wantNil: true,
+		},
+		{
+			name: "is nil",
+			args: args{
+				meta: map[string]string{
+					internal.MetadataKeyMessageDelaySeconds: "XXX",
+				},
+			},
+			want:    nil,
+			wantNil: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := extractDelaySeconds(tt.args.meta)
+			if tt.wantNil {
+				if got != nil {
+					t.Errorf("extractDelaySeconds() = %v, want %v", got, "nil")
+				}
+				return
+			}
+			if *got != *tt.want {
+				t.Errorf("extractDelaySeconds() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_extractGroupID(t *testing.T) {
+	type args struct {
+		meta map[string]string
+	}
+	tests := []struct {
+		name string
+		args args
+		want *string
+	}{
+		{
+			name: "normal case",
+			args: args{
+				meta: map[string]string{
+					internal.MetadataKeyMessageGroupID: "blue",
+				},
+			},
+			want: aws.String("blue"),
+		},
+		{
+			name: "default case",
+			args: args{
+				meta: map[string]string{},
+			},
+			want: aws.String(defaultmessageGroupID),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := extractGroupID(tt.args.meta); *got != *tt.want {
+				t.Errorf("extractGroupID() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_extractDeduplicationID(t *testing.T) {
+	type args struct {
+		meta map[string]string
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    *string
+		wantNil bool
+	}{
+		{
+			name: "normal case",
+			args: args{
+				meta: map[string]string{
+					internal.MetadataKeyMessageDeduplicationID: "message-deduplication-id",
+				},
+			},
+			want:    aws.String("message-deduplication-id"),
+			wantNil: false,
+		},
+		{
+			name: "is nil",
+			args: args{
+				meta: map[string]string{},
+			},
+			want:    nil,
+			wantNil: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := extractDeduplicationID(tt.args.meta)
+			if tt.wantNil {
+				if got != nil {
+					t.Errorf("extractDeduplicationID() = %v, want %v", got, "nil")
+				}
+				return
+			}
+			if *got != *tt.want {
+				t.Errorf("extractDeduplicationID() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_toSQSMessageAttributeValues(t *testing.T) {
+	type args struct {
+		attr map[string]*jobworker.CustomAttribute
+	}
+	tests := []struct {
+		name string
+		args args
+		want map[string]*sqs.MessageAttributeValue
+	}{
+		{
+			name: "normal case",
+			args: args{
+				attr: map[string]*jobworker.CustomAttribute{
+					"Foo": {
+						DataType:    "string",
+						BinaryValue: nil,
+						StringValue: "",
+					},
+				},
+			},
+			want: map[string]*sqs.MessageAttributeValue{},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := toSQSMessageAttributeValues(tt.args.attr); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("toSQSMessageAttributeValues() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

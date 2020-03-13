@@ -25,7 +25,8 @@ const (
 	connAttributeNameAwsSessionToken    = "SessionToken"
 	connAttributeNameNumMaxRetries      = "NumMaxRetries"
 
-	defaultNumMaxRetries = 3
+	defaultNumMaxRetries  = 3
+	defaultmessageGroupID = "default"
 )
 
 func init() {
@@ -148,18 +149,24 @@ func (c *Connector) Enqueue(ctx context.Context, input *jobworker.EnqueueInput) 
 }
 
 func (c *Connector) EnqueueBatch(ctx context.Context, input *jobworker.EnqueueBatchInput) (*jobworker.EnqueueBatchOutput, error) {
+
 	queue, err := c.resolveQueueAttributes(ctx, input.Queue)
 	if err != nil {
 		return nil, err
 	}
 	var entries []*sqs.SendMessageBatchRequestEntry
-	for k, v := range input.Id2Content {
-		entries = append(entries, newSendMessageBatchRequestEntry(k, v, input.Metadata, input.CustomAttribute, queue))
+	for _, entry := range input.Entries {
+		entries = append(entries, newSendMessageBatchRequestEntry(entry.ID,
+			entry.Content, entry.Metadata, entry.CustomAttribute, queue))
 	}
 	sqsOutput, err := c.svc.SendMessageBatchWithContext(ctx, &sqs.SendMessageBatchInput{
 		Entries:  entries,
 		QueueUrl: &queue.URL,
 	})
+	if err != nil {
+		return nil, err
+	}
+
 	var output jobworker.EnqueueBatchOutput
 	if sqsOutput != nil {
 		for _, v := range sqsOutput.Successful {
@@ -169,7 +176,7 @@ func (c *Connector) EnqueueBatch(ctx context.Context, input *jobworker.EnqueueBa
 			output.Failed = append(output.Failed, aws.StringValue(v.Id))
 		}
 	}
-	return &output, err
+	return &output, nil
 }
 
 func newSendMessageInput(content string,
@@ -232,7 +239,7 @@ func toSQSMessageAttributeValues(attr map[string]*jobworker.CustomAttribute) map
 func extractGroupID(meta map[string]string) *string {
 	messageGroupId := meta[internal.MetadataKeyMessageGroupID]
 	if messageGroupId == "" {
-		messageGroupId = "default"
+		messageGroupId = defaultmessageGroupID
 	}
 	return aws.String(messageGroupId)
 }
@@ -247,7 +254,10 @@ func extractDeduplicationID(meta map[string]string) *string {
 func extractDelaySeconds(meta map[string]string) *int64 {
 	v, ok := meta[internal.MetadataKeyMessageDelaySeconds]
 	if ok {
-		delaySeconds, _ := strconv.ParseInt(v, 10, 64)
+		delaySeconds, err := strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			return nil
+		}
 		return aws.Int64(delaySeconds)
 	}
 	return nil
