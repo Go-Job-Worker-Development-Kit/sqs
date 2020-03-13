@@ -1162,3 +1162,76 @@ func TestConnector_EnqueueBatch(t *testing.T) {
 		})
 	}
 }
+
+func TestProvider_Open(t *testing.T) {
+	type args struct {
+		attrs map[string]interface{}
+	}
+	tests := []struct {
+		name    string
+		p       Provider
+		args    args
+		want    jobworker.Connector
+		wantErr bool
+	}{
+		{
+			name: "normal case",
+			p:    Provider{},
+			args: args{
+				attrs: map[string]interface{}{
+					"Region":          "us-east-1",
+					"AccessKeyID":     "foo",
+					"SecretAccessKey": "bar",
+					"NumMaxRetries":   3,
+				},
+			},
+			want:    nil,
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := Provider{}
+			_, err := p.Open(tt.args.attrs)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Provider.Open() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func Test_extractReceiptHandle(t *testing.T) {
+	type args struct {
+		job *jobworker.Job
+	}
+	tests := []struct {
+		name string
+		args args
+		want *string
+	}{
+		{
+			name: "normal case",
+			args: args{
+				job: &jobworker.Job{
+					Raw: &sqs.Message{
+						ReceiptHandle: aws.String("foo"),
+					},
+				},
+			},
+			want: aws.String("foo"),
+		},
+		{
+			name: "is nil",
+			args: args{
+				job: &jobworker.Job{},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := extractReceiptHandle(tt.args.job); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("extractReceiptHandle() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
