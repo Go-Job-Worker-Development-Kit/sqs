@@ -6,6 +6,8 @@ github.com/go-jwdk/jobworker v0.2.0 h1:HZu5Z68C2+GUzP1ezEF5w44c3uxoqh5MIMn2wkj8j
 github.com/go-jwdk/jobworker v0.2.0/go.mod h1:h2BwDxld0GGmJDXyrnCKPKsNQbLubm4v9bcQ2vXCnp8=
 github.com/go-jwdk/jobworker v0.2.1 h1:5pqaY1SAQWfKyhyF6xjtQtXaEsE0jWOvk0o8NeEeaBw=
 github.com/go-jwdk/jobworker v0.2.1/go.mod h1:h2BwDxld0GGmJDXyrnCKPKsNQbLubm4v9bcQ2vXCnp8=
+github.com/go-jwdk/jobworker v0.3.0 h1:5uAB+sHIN2ZeX9SqxyTSa1N6UrVDhEC+nyzqU1sPNtY=
+github.com/go-jwdk/jobworker v0.3.0/go.mod h1:h2BwDxld0GGmJDXyrnCKPKsNQbLubm4v9bcQ2vXCnp8=
 github.com/jmespath/go-jmespath v0.0.0-20180206201540-c2b33e8439af h1:pmfjZENx5imkbgOkpRUYLnmbU7UEFbjtDA2hxJ1ichM=
 github.com/jmespath/go-jmespath v0.0.0-20180206201540-c2b33e8439af/go.mod h1:Nht3zPeWKUH0NzdCt2Blrr5ys8VGpn0CEB0cQHVjt7k=
 github.com/kr/pretty v0.2.0 h1:s5hAObm+yFO5uHYt5dYjxi2rXrsnmRpJx4OYvIWUaQs=
