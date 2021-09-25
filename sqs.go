@@ -49,7 +49,7 @@ func Open(attrs map[string]interface{}) (*Connector, error) {
 
 	var awsCfg aws.Config
 	awsCfg.Region = aws.String(values.region)
-	if (values.accessKeyID != "" && values.secretAccessKey != "") || values.sessionToken != "" {
+	if values.accessKeyID != "" || values.secretAccessKey != "" || values.sessionToken != "" {
 		awsCfg.Credentials = credentials.NewStaticCredentials(
 			values.accessKeyID,
 			values.secretAccessKey,
