@@ -79,6 +79,7 @@ func main() {
 |SecretAccessKey |string |false |AWS Secret Access Key |
 |SessionToken |string |false |AWS Session Token |
 |NumMaxRetries |int |false |The maximum number of times that a request will be retried for failures |
+|EndpointURL |string |false |An optional endpoint URL (hostname only or fully qualified URI) |
 
 ## Metadata String
 

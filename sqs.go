@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"sync"
 
+	"github.com/aws/aws-sdk-go/aws/endpoints"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -24,6 +26,7 @@ const (
 	connAttributeNameAwsSecretAccessKey = "SecretAccessKey"
 	connAttributeNameAwsSessionToken    = "SessionToken"
 	connAttributeNameNumMaxRetries      = "NumMaxRetries"
+	connAttributeNameEndpointURL        = "EndpointURL"
 
 	defaultNumMaxRetries  = 3
 	defaultMessageGroupID = "default"
@@ -53,6 +56,13 @@ func Open(attrs map[string]interface{}) (*Connector, error) {
 			values.sessionToken)
 	}
 	awsCfg.MaxRetries = values.numMaxRetries
+	if values.endpointURL != "" {
+		awsCfg.EndpointResolver = endpoints.ResolverFunc(func(service, region string, opts ...func(*endpoints.Options)) (endpoints.ResolvedEndpoint, error) {
+			return endpoints.ResolvedEndpoint{
+				URL: values.endpointURL,
+			}, nil
+		})
+	}
 
 	sess, err := session.NewSession(&awsCfg)
 	if err != nil {
@@ -77,6 +87,7 @@ type values struct {
 	secretAccessKey string
 	sessionToken    string
 	numMaxRetries   *int
+	endpointURL     string
 }
 
 func (v *values) applyDefaultValues() {
@@ -105,6 +116,9 @@ func connAttrsToValues(attrs map[string]interface{}) *values {
 		case connAttributeNameNumMaxRetries:
 			i := v.(int)
 			values.numMaxRetries = &i
+		case connAttributeNameEndpointURL:
+			s := v.(string)
+			values.endpointURL = s
 		}
 	}
 	return &values
