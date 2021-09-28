@@ -140,6 +140,7 @@ func (c *Connector) Subscribe(ctx context.Context, input *jobworker.SubscribeInp
 	if err != nil {
 		return nil, err
 	}
+	c.debug("resolve queue:", queue.URL, queue.Name)
 	sub := internal.NewSubscription(queue, c.svc, c, input.Metadata)
 	go sub.Start()
 	return &jobworker.SubscribeOutput{

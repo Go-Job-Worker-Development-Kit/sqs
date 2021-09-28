@@ -3,6 +3,7 @@ package internal
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strconv"
 	"sync/atomic"
 	"time"
@@ -142,14 +143,19 @@ func (s *Subscription) writeMessageChan(ch chan *sqs.Message) {
 			MaxNumberOfMessages: s.maxNumberOfMessages,
 		})
 		if err != nil {
+			fmt.Println("receiveMessage error", err)
 			close(ch)
 			return
 		}
+		fmt.Println("receiveMessage success")
 		if len(result.Messages) == 0 {
+			fmt.Println("receiveMessage empty")
 			time.Sleep(s.pollingInterval)
+			fmt.Println("receiveMessage retry")
 			continue
 		}
 		for _, msg := range result.Messages {
+			fmt.Println("receiveMessage msg", msg.String())
 			ch <- msg
 		}
 	}
