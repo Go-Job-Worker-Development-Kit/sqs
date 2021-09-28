@@ -130,6 +130,7 @@ func (s *Subscription) writeMessageChan(ch chan *sqs.Message) {
 			return
 		}
 		ctx := context.Background()
+		fmt.Println("queueAttributes:", s.queueAttributes.URL)
 		result, err := s.receiveMessage(ctx, &sqs.ReceiveMessageInput{
 			AttributeNames: []*string{
 				aws.String(sqs.QueueAttributeNameAll),
