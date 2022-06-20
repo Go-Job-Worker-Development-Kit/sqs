@@ -142,8 +142,8 @@ func (s *Subscription) writeMessageChan(ch chan *sqs.Message) {
 			MaxNumberOfMessages: s.maxNumberOfMessages,
 		})
 		if err != nil {
-			close(ch)
-			return
+			time.Sleep(s.pollingInterval)
+			continue
 		}
 		if len(result.Messages) == 0 {
 			time.Sleep(s.pollingInterval)

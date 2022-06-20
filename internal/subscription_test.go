@@ -356,7 +356,7 @@ func TestSubscription_writeMessageChan(t *testing.T) {
 				ch: make(chan *sqs.Message, 10),
 			},
 			wantMessageSize: 0,
-			wantClosedChan:  true,
+			wantClosedChan:  false,
 		},
 	}
 	for _, tt := range tests {
@@ -370,6 +370,7 @@ func TestSubscription_writeMessageChan(t *testing.T) {
 				receiveMessage:      tt.fields.receiveMessage,
 				state:               tt.fields.state,
 			}
+			defer s.UnSubscribe()
 			go s.writeMessageChan(tt.args.ch)
 			time.Sleep(time.Second / 2)
 			if tt.wantClosedChan {
