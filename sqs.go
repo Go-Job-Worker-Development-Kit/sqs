@@ -48,6 +48,7 @@ func Open(attrs map[string]interface{}) (*Connector, error) {
 	values.applyDefaultValues()
 
 	var awsCfg aws.Config
+	awsCfg.CredentialsChainVerboseErrors = aws.Bool(true)
 	awsCfg.Region = aws.String(values.region)
 	if values.accessKeyID != "" || values.secretAccessKey != "" || values.sessionToken != "" {
 		awsCfg.Credentials = credentials.NewStaticCredentials(
